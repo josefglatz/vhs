@@ -1,33 +1,51 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\Iterator;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\AbstractViewHelperTest;
+use TYPO3\CMS\Extbase\Persistence\Generic\QueryResult;
 
 /**
- * @protection on
- * @author Claus Due <claus@wildside.dk>
- * @package Vhs
+ * Class RandomViewHelperTest
  */
-class Tx_Vhs_ViewHelpers_Iterator_RandomViewHelperTest extends Tx_Vhs_ViewHelpers_AbstractViewHelperTest {
+class RandomViewHelperTest extends AbstractViewHelperTest
+{
 
+    /**
+     * @test
+     * @dataProvider getRenderTestValues
+     * @param array $arguments
+     * @param array $asArray
+     */
+    public function testRender(array $arguments, array $asArray)
+    {
+        $value = $this->executeViewHelper($arguments);
+        if (null !== $value) {
+            $this->assertContains($value, $asArray);
+        } else {
+            $this->assertNull($value);
+        }
+    }
+
+    /**
+     * @return array
+     */
+    public function getRenderTestValues()
+    {
+        $queryResult = $this->getMockBuilder(QueryResult::class)->setMethods(['toArray', 'initialize', 'rewind', 'valid', 'count'])->disableOriginalConstructor()->getMock();
+        $queryResult->expects($this->any())->method('toArray')->will($this->returnValue(['foo', 'bar']));
+        $queryResult->expects($this->any())->method('count')->will($this->returnValue(0));
+        $queryResult->expects($this->any())->method('valid')->will($this->returnValue(false));
+        return [
+            [['subject' => ['foo', 'bar']], ['foo', 'bar']],
+            [['subject' => new \ArrayIterator(['foo', 'bar'])], ['foo', 'bar']],
+            [['subject' => $queryResult], ['foo', 'bar']],
+        ];
+    }
 }

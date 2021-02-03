@@ -1,74 +1,71 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Media;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithContentArgumentAndRenderStatic;
 
 /**
- * Returns the extension of the provided file
- *
- * @author Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- * @package Vhs
- * @subpackage ViewHelpers\Media
+ * Returns the extension of the provided file.
  */
-class Tx_Vhs_ViewHelpers_Media_ExtensionViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class ExtensionViewHelper extends AbstractViewHelper
+{
+    use CompileWithContentArgumentAndRenderStatic;
 
-	/**
-	 * Initialize arguments.
-	 *
-	 * @return void
-	 * @api
-	 */
-	public function initializeArguments() {
-		$this->registerArgument('file', 'string', 'Path to the file to determine extension for.', TRUE);
-	}
+    /**
+     * @var boolean
+     */
+    protected $escapeChildren = false;
 
-	/**
-	 * @return string
-	 */
-	public function render() {
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
 
-		$filePath = $this->arguments['file'];
+    /**
+     * Initialize arguments.
+     *
+     * @return void
+     * @api
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('file', 'string', 'Path to the file to determine extension for.');
+    }
 
-		if ($filePath === NULL) {
-			$filePath = $this->renderChildren();
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return string
+     */
+    public static function renderStatic(array $arguments, \Closure $renderChildrenClosure, RenderingContextInterface $renderingContext)
+    {
+        $filePath = $renderChildrenClosure();
 
-			if ($filePath === NULL) {
-				return '';
-			}
-		}
+        if (null === $filePath) {
+            return '';
+        }
 
-		$file = t3lib_div::getFileAbsFileName($filePath);
+        $file = GeneralUtility::getFileAbsFileName($filePath);
 
-		$parts = explode('.', basename($file));
+        $parts = explode('.', basename($file));
 
-		// file has no extension
-		if (count($parts) == 1) {
-			return '';
-		}
+        // file has no extension
+        if (1 === count($parts)) {
+            return '';
+        }
 
-		$extension = strtolower(array_pop($parts));
+        $extension = strtolower(array_pop($parts));
 
-		return $extension;
-	}
-
+        return $extension;
+    }
 }

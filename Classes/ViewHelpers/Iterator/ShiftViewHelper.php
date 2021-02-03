@@ -1,60 +1,65 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Iterator;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Traits\ArrayConsumingViewHelperTrait;
+use FluidTYPO3\Vhs\Traits\TemplateVariableViewHelperTrait;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
- * Shifts the first value off $subject (but does not change $subject itself as array_shift would)
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Iterator
+ * Shifts the first value off $subject (but does not change $subject itself as array_shift would).
  */
-class Tx_Vhs_ViewHelpers_Iterator_ShiftViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class ShiftViewHelper extends AbstractViewHelper
+{
+    use TemplateVariableViewHelperTrait;
+    use ArrayConsumingViewHelperTrait;
 
-	/**
-	 * Render method
-	 *
-	 * @param mixed $subject The subject Traversable/Array instance to shift
-	 * @param string $as If specified, inserts a template variable with this name, then renders the child content, then removes the variable
-	 * @throws Exception
-	 * @return array
-	 */
-	public function render($subject = NULL, $as = NULL) {
-		if (NULL === $subject) {
-			$subject = $this->renderChildren();
-		}
-		if (TRUE === $subject instanceof Traversable) {
-			$subject = iterator_to_array($subject, TRUE);
-		} elseif (TRUE !== is_array($subject)) {
-			throw new Exception('Cannot get values of unsupported type: ' . gettype($subject), 1357098192);
-		}
-		$output = array_shift($subject);
-		if (NULL !== $as) {
-			$variables = array($as => $output);
-			$output = Tx_Vhs_Utility_ViewHelperUtility::renderChildrenWithVariables($this, $this->templateVariableContainer, $variables);
-		}
-		return $output;
-	}
+    /**
+     * @var boolean
+     */
+    protected $escapeChildren = false;
 
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
+
+    /**
+     * Initialize arguments
+     *
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('subject', 'mixed', 'The input array/Traversable to shift');
+        $this->registerAsArgument();
+    }
+
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return mixed
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        $subject = static::arrayFromArrayOrTraversableOrCSVStatic(empty($arguments['as']) ? ($arguments['subject'] ?? $renderChildrenClosure()) : $arguments['subject']);
+        $output = array_shift($subject);
+        return static::renderChildrenWithVariableOrReturnInputStatic(
+            $output,
+            $arguments['as'],
+            $renderingContext,
+            $renderChildrenClosure
+        );
+    }
 }

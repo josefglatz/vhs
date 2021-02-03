@@ -1,49 +1,50 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Format;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithContentArgumentAndRenderStatic;
 
 /**
  * Replaces $substring in $content with $replacement.
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Format
  */
-class Tx_Vhs_ViewHelpers_Format_ReplaceViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class ReplaceViewHelper extends AbstractViewHelper
+{
+    use CompileWithContentArgumentAndRenderStatic;
 
-	/**
-	 * @param string $substring
-	 * @param string $content
-	 * @param string $replacement
-	 * @param integer $count
-	 * @return string
-	 */
-	public function render($substring, $content = NULL, $replacement = '', $count = NULL) {
-		if ($content === NULL) {
-			$content = $this->renderChildren();
-		}
-		return str_replace($substring, $replacement, $content, $count);
-	}
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('content', 'string', 'Content in which to perform replacement');
+        $this->registerArgument('substring', 'string', 'Substring to replace', true);
+        $this->registerArgument('replacement', 'string', 'Replacement to insert', false, '');
+        $this->registerArgument('count', 'integer', 'Maximum number of times to perform replacement');
+        $this->registerArgument('caseSensitive', 'boolean', 'If true, perform case-sensitive replacement', false, true);
+    }
 
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return mixed
+     */
+    public static function renderStatic(array $arguments, \Closure $renderChildrenClosure, RenderingContextInterface $renderingContext)
+    {
+        $content = $renderChildrenClosure();
+        $substring = $arguments['substring'];
+        $replacement = $arguments['replacement'];
+        $count = (integer) $arguments['count'];
+        $caseSensitive = (boolean) $arguments['caseSensitive'];
+        $function = (true === $caseSensitive ? 'str_replace' : 'str_ireplace');
+        return $function($substring, $replacement, $content, $count);
+    }
 }

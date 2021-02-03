@@ -1,27 +1,16 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Render;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithContentArgumentAndRenderStatic;
 
 /**
  * ### Render: ASCII Character
@@ -44,33 +33,52 @@
  *
  *     {v:render.ascii(ascii: {0: 13, 1: 10})}
  *
- * Will produce a Windows line break, \r\n
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Render
+ * Will produce a Windows line break, \r\n.
  */
-class Tx_Vhs_ViewHelpers_Render_AsciiViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class AsciiViewHelper extends AbstractViewHelper
+{
+    use CompileWithContentArgumentAndRenderStatic;
 
-	/**
-	 * @param mixed $ascii
-	 * @return string
-	 */
-	public function render($ascii = NULL) {
-		if (NULL === $ascii) {
-			$ascii = $this->renderChildren();
-		}
-		if (TRUE === ctype_digit($ascii)) {
-			return chr($ascii);
-		}
-		if (TRUE === is_array($ascii) || TRUE === $ascii instanceof Traversable) {
-			$string = '';
-			foreach ($ascii as $characterNumber) {
-				$string .= chr($characterNumber);
-			}
-			return $string;
-		}
-		return '';
-	}
+    /**
+     * @var boolean
+     */
+    protected $escapeChildren = false;
 
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
+
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('ascii', 'mixed', 'ASCII character to render');
+    }
+
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return string
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        $ascii = $renderChildrenClosure();
+        if (true === is_numeric($ascii)) {
+            return chr((integer) $ascii);
+        }
+        if (true === is_array($ascii) || true === $ascii instanceof \Traversable) {
+            $string = '';
+            foreach ($ascii as $characterNumber) {
+                $string .= chr($characterNumber);
+            }
+            return $string;
+        }
+        return '';
+    }
 }

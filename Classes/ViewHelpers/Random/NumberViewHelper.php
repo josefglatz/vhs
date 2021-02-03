@@ -1,27 +1,16 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Random;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
  * ### Random: Number Generator
@@ -29,30 +18,74 @@
  * Generates a random number. The default minimum number is
  * set to 100000 in order to generate a longer integer string
  * representation. Decimal values can be generated as well.
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Random
  */
-class Tx_Vhs_ViewHelpers_Random_NumberViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class NumberViewHelper extends AbstractViewHelper
+{
+    use CompileWithRenderStatic;
 
-	/**
-	 * @param integer $minimum Minimum number - defaults to 100000 (max is 999999 making lengths uniform with adequate entropy)
-	 * @param integer $maximum Maximum number - defaults to 999999 (min is 100000 making lengths uniform with adequate entropy)
-	 * @param integer $minimumDecimals Minimum number of also randomized decimal digits to add to number
-	 * @param integer $maximumDecimals Maximum number of also randomized decimal digits to add to number
-	 * @return float
-	 */
-	public function render($minimum = 100000, $maximum = 999999, $minimumDecimals = 0, $maximumDecimals = 0) {
-		$natural = rand($minimum, $maximum);
-		if (!($minimumDecimals && $maximumDecimals)) {
-			return $natural;
-		}
-		$decimals = array_fill(0, rand($minimumDecimals, $maximumDecimals), 0);
-		$decimals = array_map(function() {
-			return rand(0, 9);
-		}, $decimals);
-		return floatval($natural . '.' . implode('', $decimals));
-	}
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
 
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument(
+            'minimum',
+            'integer',
+            'Minimum number - defaults to 100000 (default max is 999999 for equal string lengths)',
+            false,
+            100000
+        );
+        $this->registerArgument(
+            'maximum',
+            'integer',
+            'Maximum number - defaults to 999999 (default min is 100000 for equal string lengths)',
+            false,
+            999999
+        );
+        $this->registerArgument(
+            'minimumDecimals',
+            'integer',
+            'Minimum number of also randomized decimal digits to add to number',
+            false,
+            0
+        );
+        $this->registerArgument(
+            'maximumDecimals',
+            'integer',
+            'Maximum number of also randomized decimal digits to add to number',
+            false,
+            0
+        );
+    }
+
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return integer|float
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        $minimum = $arguments['minimum'];
+        $maximum = $arguments['maximum'];
+        $minimumDecimals = $arguments['minimumDecimals'];
+        $maximumDecimals = $arguments['maximumDecimals'];
+        $natural = random_int($minimum, $maximum);
+        if (0 === (integer) $minimumDecimals && 0 === (integer) $maximumDecimals) {
+            return $natural;
+        }
+        $decimals = array_fill(0, random_int($minimumDecimals, $maximumDecimals), 0);
+        $decimals = array_map(function () {
+            return random_int(0, 9);
+        }, $decimals);
+        return $natural . '.' . implode('', $decimals);
+    }
 }

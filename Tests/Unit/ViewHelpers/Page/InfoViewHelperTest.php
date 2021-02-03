@@ -1,122 +1,58 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Page;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\AbstractViewHelperTest;
+use TYPO3\CMS\Frontend\Page\PageRepository;
 
 /**
- * @protection off
- * @author Claus Due <claus@wildside.dk>
- * @package Vhs
+ * Class InfoViewHelperTest
  */
-class Tx_Vhs_ViewHelpers_Page_InfoViewHelperTest extends Tx_Extbase_Tests_Unit_BaseTestCase {
+class InfoViewHelperTest extends AbstractViewHelperTest
+{
+    public function testReturnsCorrectSingleFieldValue()
+    {
+        if (class_exists(\TYPO3\CMS\Core\Database\ConnectionPool::class)) {
+            $this->markTestSkipped('Test is skippped on TYPO3v8 for now, due to tested code having tight coupling to Doctrine');
+        }
+        $expectedFieldValue = 42;
 
-	/**
-	 * @var $objectManager Tx_Extbase_Object_ObjectManagerInterface
-	 */
-	protected $objectManager;
+        $this->mockPageRepository();
+        $GLOBALS['TSFE']->sys_page->expects($this->any())->method('getPage_noCheck')->willReturn(['tx_foo_bar' => $expectedFieldValue]);
+        $this->assertEquals($expectedFieldValue, $this->executeViewHelper(['pageUid' => 12, 'field' => 'tx_foo_bar']));
+    }
 
-	/**
-	 * @param $objectManager Tx_Extbase_Object_ObjectManagerInterface
-	 * @return void
-	 */
-	protected function injectObjectManager(Tx_Extbase_Object_ObjectManagerInterface $objectManager) {
-		$this->objectManager = $objectManager;
-	}
+    public function testReturnsPageRowIfNoFieldGiven()
+    {
+        if (class_exists(\TYPO3\CMS\Core\Database\ConnectionPool::class)) {
+            $this->markTestSkipped('Test is skippped on TYPO3v8 for now, due to tested code having tight coupling to Doctrine');
+        }
+        $expectedRow = ['uid' => 42, 'tx_foo_bar' => 'baz'];
 
-	/**
-	 * @return Tx_Vhs_ViewHelpers_Page_InfoViewHelper
-	 * @support
-	 */
-	protected function getPreparedInstance() {
-		$viewHelperClassName = 'Tx_Vhs_ViewHelpers_Page_InfoViewHelper';
-		$arguments = array();
-		$nodeClassName = (FALSE !== strpos($viewHelperClassName, '_') ? 'Tx_Fluid_Core_Parser_SyntaxTree_ViewHelperNode' : '\\TYPO3\\CMS\\Fluid\\Core\\Parser\\SyntaxTree\\ViewHelperNode');
-		$renderingContextClassName = (FALSE !== strpos($viewHelperClassName, '_') ? 'Tx_Fluid_Core_Rendering_RenderingContext' : '\\TYPO3\\CMS\\Fluid\\Core\\Rendering\\RenderingContext');
-		$controllerContextClassName = (FALSE !== strpos($viewHelperClassName, '_') ? 'Tx_Extbase_MVC_Controller_ControllerContext' : '\\TYPO3\\CMS\\Extbase\\MVC\\Controller\\ControllerContext');
-		$requestClassName = (FALSE !== strpos($viewHelperClassName, '_') ? 'Tx_Extbase_MVC_Web_Request' : '\\TYPO3\\CMS\\Extbase\\MVC\\Web\\Request');
+        $this->mockPageRepository();
+        $GLOBALS['TSFE']->sys_page->expects($this->any())->method('getPage_noCheck')->willReturn($expectedRow);
+        $this->assertEquals($expectedRow, $this->executeViewHelper(['pageUid' => 42]));
+    }
 
-		/** @var Tx_Extbase_MVC_Web_Request $request */
-		$request = $this->objectManager->get($requestClassName);
-		/** @var $viewHelperInstance Tx_Fluid_Core_ViewHelper_AbstractViewHelper */
-		$viewHelperInstance = $this->objectManager->get($viewHelperClassName);
-		/** @var Tx_Fluid_Core_Parser_SyntaxTree_ViewHelperNode $node */
-		$node = $this->objectManager->get($nodeClassName, $viewHelperInstance, $arguments);
-		/** @var Tx_Extbase_MVC_Controller_ControllerContext $controllerContext */
-		$controllerContext = $this->objectManager->get($controllerContextClassName);
-		$controllerContext->setRequest($request);
-		/** @var Tx_Fluid_Core_Rendering_RenderingContext $renderingContext */
-		$renderingContext = $this->objectManager->get($renderingContextClassName);
-		$renderingContext->setControllerContext($controllerContext);
+    public function testThrowsExceptionWhenUsedInBackend()
+    {
+        if (class_exists(\TYPO3\CMS\Core\Database\ConnectionPool::class)) {
+            $this->markTestSkipped('Test is skippped on TYPO3v8 for now, due to tested code having tight coupling to Doctrine');
+        }
+        unset($GLOBALS['TSFE']);
+        $this->expectViewHelperException();
+        $this->executeViewHelper(['pageUid' => 42]);
+    }
 
-		$viewHelperInstance->setRenderingContext($renderingContext);
-		$viewHelperInstance->setViewHelperNode($node);
-		return $viewHelperInstance;
-	}
-
-	/**
-	 * @test
-	 */
-	public function canCreateViewHelperClassInstance() {
-		$instance = $this->getPreparedInstance();
-		$this->assertInstanceOf('Tx_Vhs_ViewHelpers_Page_InfoViewHelper', $instance);
-	}
-
-	/**
-	 * @test
-	 */
-	public function canInitializeViewHelper() {
-		$instance = $this->getPreparedInstance();
-		$instance->initialize();
-	}
-
-	/**
-	 * @test
-	 */
-	public function canPrepareViewHelperArguments() {
-		$instance = $this->getPreparedInstance();
-		$this->assertInstanceOf('Tx_Vhs_ViewHelpers_Page_InfoViewHelper', $instance);
-		$arguments = $instance->prepareArguments();
-		$constraint = new PHPUnit_Framework_Constraint_IsType('array');
-		$this->assertThat($arguments, $constraint);
-	}
-
-	/**
-	 * @test
-	 */
-	public function canSetViewHelperNode() {
-		$instance = $this->getPreparedInstance();
-		$arguments = $instance->prepareArguments();
-		$node = new \TYPO3\CMS\Fluid\Core\Parser\SyntaxTree\ViewHelperNode($instance, $arguments);
-		$instance->setViewHelperNode($node);
-	}
-
-	/**
-	 * @test
-	 */
-	public function canRenderWithoutProvidedArguments() {
-		$instance = $this->getPreparedInstance();
-		$this->assertInstanceOf('Tx_Vhs_ViewHelpers_Page_InfoViewHelper', $instance);
-		$instance->render();
-	}
-
+    private function mockPageRepository()
+    {
+        $pageRepository = $this->getMockBuilder(PageRepository::class)->setMethods(['getPage_noCheck'])->getMock();
+        $GLOBALS['TSFE'] = (object) ['sys_page' => $pageRepository];
+    }
 }

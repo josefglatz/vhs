@@ -1,27 +1,16 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Random;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
  * ### Random: String Generator
@@ -29,36 +18,56 @@
  * Use either `minimumLength` / `maximumLength` or just `length`.
  *
  * Specify the characters which can be randomized using `characters`.
- *
- * Has built-in insurance that first character of random string is
- * an alphabetic character (allowing safe use as DOM id for example).
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Random
  */
-class Tx_Vhs_ViewHelpers_Random_StringViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class StringViewHelper extends AbstractViewHelper
+{
+    use CompileWithRenderStatic;
 
-	/**
-	 * @param integer $length
-	 * @param integer $minimumLength
-	 * @param integer $maximumLength
-	 * @param string $characters
-	 * @return string
-	 */
-	public function render($length = NULL, $minimumLength = 32, $maximumLength = 32, $characters = '0123456789abcdef') {
-		$minimumLength = intval($minimumLength);
-		$maximumLength = intval($maximumLength);
-		$length = ($minimumLength != $maximumLength ? rand($minimumLength, $maximumLength) : ($length !== NULL ? $length : $minimumLength));
-		$string = '';
-		for ($i = 0; $i < $length && $length > 0; $i++) {
-			$randomIndex = rand(0, strlen($characters));
-			$string .= $characters{$randomIndex};
-		}
-		$characters = preg_replace('/([^a-z]+)/i', '', $characters);
-		$randomIndex = rand(0, strlen($characters) - 1);
-		$string{0} = $characters{$randomIndex};
-		return $string;
-	}
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
 
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('length', 'integer', 'Length of string to generate');
+        $this->registerArgument('minimumLength', 'integer', 'Minimum length of string if random length', false, 32);
+        $this->registerArgument('maximumLength', 'integer', 'Minimum length of string if random length', false, 32);
+        $this->registerArgument('characters', 'string', 'Characters to use in string', false, '0123456789abcdef');
+    }
+
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return string
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        $length = $arguments['length'];
+        $minimumLength = (integer) $arguments['minimumLength'];
+        $maximumLength = (integer) $arguments['maximumLength'];
+        $characters = $arguments['characters'];
+        if ($minimumLength != $maximumLength) {
+            $length = random_int($minimumLength, $maximumLength);
+        } else {
+            $length = $length !== null ? $length : $minimumLength;
+        }
+        $string = '';
+        if ($characters === '0123456789abcdef') {
+            $string = bin2hex(random_bytes($length));
+        } else {
+            for ($i = 0; $i < $length; $i++) {
+                $randomIndex = random_int(0, mb_strlen($characters) - 1);
+                $string .= $characters[$randomIndex];
+            }
+        }
+        return $string;
+    }
 }

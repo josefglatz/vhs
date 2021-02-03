@@ -1,27 +1,19 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\ViewHelpers\Asset\AssetInterface;
+use TYPO3\CMS\Core\Utility\ArrayUtility;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
+use TYPO3\CMS\Extbase\Object\ObjectManager;
+use TYPO3\CMS\Extbase\Reflection\ObjectAccess;
 
 /**
  * ### Asset
@@ -30,15 +22,15 @@
  *
  * ### Examples:
  *
- *     $asset = $this->objectManager->get('Tx_Vhs_Asset');
+ *     $asset = $this->objectManager->get('FluidTYPO3\\Vhs\\Asset');
  *     // OR you can use the static factory method which works anywhere
  *     // including outside of Extbase.
- *     $asset = Tx_Vhs_Asset::getInstance();
+ *     $asset = \FluidTYPO3\Vhs\Asset::getInstance();
  *     $asset->setPath('fileadmin/test.js')->setStandalone(TRUE)->finalize();
  *
  * Or simply:
  *
- *     $this->objectManager->get('Tx_Vhs_Asset')->setPath('...')->finalize();
+ *     $this->objectManager->get('FluidTYPO3\\Vhs\\Asset')->setPath('...')->finalize();
  *
  * And you can create clean instances:
  *
@@ -49,14 +41,14 @@
  * Or if you have all settings in an array (with members named according to
  * the properties on this class:
  *
- *     Tx_Vhs_Asset::createFromSettings($settings)->finalize();
+ *     \FluidTYPO3\Vhs\Asset::createFromSettings($settings)->finalize();
  *
  * Finally, if your Asset is file based, VHS can perform a few detections to
  * set initial attributes like standalone, external (if file contains protocol),
  * type (based on extension) and name (base name of file).
  *
- *     Tx_Vhs_Asset::createFromFile($filePathAndFilename);
- *     Tx_Vhs_Asset::createFromUrl($urlToExternalFile);
+ *     \FluidTYPO3\Vhs\Asset::createFromFile($filePathAndFilename);
+ *     \FluidTYPO3\Vhs\Asset::createFromUrl($urlToExternalFile);
  *
  * You can chain all setters on the class before finally calling finalize() to
  * register the Asset (you can still modify the Asset afterwards, but an Asset
@@ -67,513 +59,631 @@
  * > on your Asset just before returning it. You can of course keep modifying
  * > the instance after it is returned - but when using a "createFrom"... method
  * > VHS assumes you always want your Asset included in the output.
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
  */
-class Tx_Vhs_Asset implements Tx_Vhs_ViewHelpers_Asset_AssetInterface {
+class Asset implements AssetInterface
+{
 
-	/**
-	 * @var Tx_Extbase_Configuration_ConfigurationManagerInterface
-	 */
-	protected $configurationManager;
+    /**
+     * @var \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface
+     */
+    protected $configurationManager;
 
-	/**
-	 * @var array
-	 */
-	protected $dependencies = array();
+    /**
+     * @var array
+     */
+    protected $dependencies = [];
 
-	/**
-	 * @var string
-	 */
-	protected $type = NULL;
+    /**
+     * @var string
+     */
+    protected $type = null;
 
-	/**
-	 * @var string
-	 */
-	protected $name = NULL;
+    /**
+     * @var string
+     */
+    protected $name = null;
 
-	/**
-	 * @var string
-	 */
-	protected $content = NULL;
+    /**
+     * @var string
+     */
+    protected $content = null;
 
-	/**
-	 * @var string
-	 */
-	protected $path = NULL;
+    /**
+     * @var string
+     */
+    protected $path = null;
 
-	/**
-	 * @var boolean
-	 */
-	protected $namedChunks = FALSE;
+    /**
+     * @var boolean
+     */
+    protected $namedChunks = false;
 
-	/**
-	 * @var boolean
-	 */
-	protected $movable = TRUE;
+    /**
+     * @var boolean
+     */
+    protected $movable = true;
 
-	/**
-	 * @var boolean
-	 */
-	protected $removed = FALSE;
+    /**
+     * @var boolean
+     */
+    protected $removed = false;
 
-	/**
-	 * @var boolean
-	 */
-	protected $fluid = FALSE;
+    /**
+     * @var boolean
+     */
+    protected $fluid = false;
 
-	/**
-	 * @var array
-	 */
-	protected $variables = array();
+    /**
+     * @var array
+     */
+    protected $variables = [];
 
-	/**
-	 * @var array
-	 */
-	protected $settings = array();
+    /**
+     * @var array
+     */
+    protected $settings = [];
 
-	/**
-	 * @var boolean
-	 */
-	protected $external = FALSE;
+    /**
+     * @var boolean
+     */
+    protected $external = false;
 
-	/**
-	 * @var boolean
-	 */
-	protected $standalone = FALSE;
+    /**
+     * @var boolean
+     */
+    protected $standalone = false;
 
-	/**
-	 * @var array
-	 */
-	private static $settingsCache = NULL;
+    /**
+     * @var boolean
+     */
+    protected $async = false;
 
-	/**
-	 * @param Tx_Extbase_Configuration_ConfigurationManagerInterface $configurationManager
-	 * @return void
-	 */
-	public function injectConfigurationManager(Tx_Extbase_Configuration_ConfigurationManagerInterface $configurationManager) {
-		$this->configurationManager = $configurationManager;
-	}
+    /**
+     * @var boolean
+     */
+    protected $defer = false;
 
-	/**
-	 * @return Tx_Vhs_Asset
-	 */
-	public static function getInstance() {
-		/** @var $asset Tx_Vhs_Asset */
-		$asset = t3lib_div::makeInstance('Tx_Extbase_Object_ObjectManager')->get('Tx_Vhs_Asset');
-		return $asset;
-	}
+    /**
+     * @var boolean
+     */
+    protected $rewrite = true;
 
-	/**
-	 * @param array $settings
-	 * @return Tx_Vhs_Asset
-	 */
-	public static function createFromSettings(array $settings) {
-		$asset = self::getInstance();
-		foreach ($settings as $propertyName => $value) {
-			Tx_Extbase_Reflection_ObjectAccess::setProperty($asset, $propertyName, $value);
-		}
-		return $asset->finalize();
-	}
+    /**
+     * @var array
+     */
+    private static $settingsCache = null;
 
-	/**
-	 * @param string $filePathAndFilename
-	 * @return Tx_Vhs_Asset
-	 */
-	public static function createFromFile($filePathAndFilename) {
-		$asset = self::getInstance();
-		$asset->setExternal(FALSE);
-		$asset->setPath($filePathAndFilename);
-		return $asset->finalize();
-	}
+    /**
+     * @param \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface $configurationManager
+     * @return void
+     */
+    public function injectConfigurationManager(ConfigurationManagerInterface $configurationManager)
+    {
+        $this->configurationManager = $configurationManager;
+    }
 
-	/**
-	 * @param string $content
-	 * @return Tx_Vhs_Asset
-	 */
-	public static function createFromContent($content) {
-		$asset = self::getInstance();
-		$asset->setContent($content);
-		$asset->setName(md5($content));
-		return $asset->finalize();
-	}
+    /**
+     * @return Asset
+     */
+    public static function getInstance()
+    {
+        /** @var $asset Asset */
+        $asset = GeneralUtility::makeInstance(ObjectManager::class)->get(Asset::class);
+        return $asset;
+    }
 
-	/**
-	 * @param string $url
-	 * @return Tx_Vhs_Asset
-	 */
-	public static function createFromUrl($url) {
-		$asset = self::getInstance();
-		$asset->setStandalone(TRUE);
-		$asset->setExternal(TRUE);
-		$asset->setPath($url);
-		return $asset->finalize();
-	}
+    /**
+     * @param array $settings
+     * @return Asset
+     */
+    public static function createFromSettings(array $settings)
+    {
+        $asset = static::getInstance();
+        foreach ($settings as $propertyName => $value) {
+            ObjectAccess::setProperty($asset, $propertyName, $value);
+        }
+        return $asset->finalize();
+    }
 
-	/**
-	 * Render method
-	 *
-	 * @return void
-	 */
-	public function render() {
-		return $this->build();
-	}
+    /**
+     * @param string $filePathAndFilename
+     * @return Asset
+     */
+    public static function createFromFile($filePathAndFilename)
+    {
+        $asset = static::getInstance();
+        $asset->setExternal(false);
+        $asset->setPath($filePathAndFilename);
+        return $asset->finalize();
+    }
 
-	/**
-	 * Build this asset. Override this method in the specific
-	 * implementation of an Asset in order to:
-	 *
-	 * - if necessary compile the Asset (LESS, SASS, CoffeeScript etc)
-	 * - make a final rendering decision based on arguments
-	 *
-	 * Note that within this function the ViewHelper and TemplateVariable
-	 * Containers are not dependable, you cannot use the ControllerContext
-	 * and RenderingContext and you should therefore also never call
-	 * renderChildren from within this function. Anything else goes; CLI
-	 * commands to build, caching implementations - you name it.
-	 *
-	 * @return mixed
-	 */
-	public function build() {
-		$path = $this->getPath();
-		if (TRUE === empty($path)) {
-			return $this->getContent();
-		}
-		$content = file_get_contents($path);
-		return $content;
-	}
+    /**
+     * @param string $content
+     * @return Asset
+     */
+    public static function createFromContent($content)
+    {
+        $asset = static::getInstance();
+        $asset->setContent($content);
+        $asset->setName(md5($content));
+        return $asset->finalize();
+    }
 
-	/**
-	 * @return void
-	 */
-	public function finalize() {
-		$name = $this->getName();
-		if (TRUE === empty($name)) {
-			$name = md5(spl_object_hash($this));
-		}
-		if (FALSE === isset($GLOBALS['VhsAssets']) || FALSE === is_array($GLOBALS['VhsAssets'])) {
-			$GLOBALS['VhsAssets'] = array();
-		}
-		$GLOBALS['VhsAssets'][$name] = $this;
-		return $this;
-	}
+    /**
+     * @param string $url
+     * @return Asset
+     */
+    public static function createFromUrl($url)
+    {
+        $asset = static::getInstance();
+        $asset->setStandalone(true);
+        $asset->setExternal(true);
+        $asset->setPath($url);
+        return $asset->finalize();
+    }
 
-	/**
-	 * @return Tx_Vhs_Asset
-	 */
-	public function remove() {
-		return $this->setRemoved(TRUE);
-	}
+    /**
+     * Render method
+     *
+     * @return mixed
+     */
+    public function render()
+    {
+        return $this->build();
+    }
 
-	/**
-	 * @return array
-	 */
-	public function getDependencies() {
-		return $this->dependencies;
-	}
+    /**
+     * Build this asset. Override this method in the specific
+     * implementation of an Asset in order to:
+     *
+     * - if necessary compile the Asset (LESS, SASS, CoffeeScript etc)
+     * - make a final rendering decision based on arguments
+     *
+     * Note that within this function the ViewHelper and TemplateVariable
+     * Containers are not dependable, you cannot use the ControllerContext
+     * and RenderingContext and you should therefore also never call
+     * renderChildren from within this function. Anything else goes; CLI
+     * commands to build, caching implementations - you name it.
+     *
+     * @return mixed
+     */
+    public function build()
+    {
+        $path = $this->getPath();
+        if (true === empty($path)) {
+            return $this->getContent();
+        }
+        $content = file_get_contents($path);
+        return $content;
+    }
 
-	/**
-	 * @param array $dependencies
-	 * @return Tx_Vhs_Asset
-	 */
-	public function setDependencies($dependencies) {
-		$this->dependencies = $dependencies;
-		return $this;
-	}
+    /**
+     * @return Asset
+     */
+    public function finalize()
+    {
+        $name = $this->getName();
+        if (true === empty($name)) {
+            $name = md5($this->standalone . '//' . $this->type . '//' . $this->path . '//' . $this->content);
+            if ($this->fluid) {
+                $name .= '_' . md5(serialize($this->variables));
+            }
+        }
+        if (false === isset($GLOBALS['VhsAssets']) || false === is_array($GLOBALS['VhsAssets'])) {
+            $GLOBALS['VhsAssets'] = [];
+        }
+        $GLOBALS['VhsAssets'][$name] = $this;
+        return $this;
+    }
 
-	/**
-	 * @return string
-	 */
-	public function getType() {
-		return $this->type;
-	}
+    /**
+     * @return Asset
+     */
+    public function remove()
+    {
+        return $this->setRemoved(true);
+    }
 
-	/**
-	 * @param string $type
-	 * @return Tx_Vhs_Asset
-	 */
-	public function setType($type) {
-		$this->type = $type;
-		if ('css' == strtolower($type)) {
-			$this->setMovable(FALSE);
-		}
-		return $this;
-	}
+    /**
+     * @return array
+     */
+    public function getDependencies()
+    {
+        return $this->dependencies;
+    }
 
-	/**
-	 * @param boolean $external
-	 * @return Tx_Vhs_Asset
-	 */
-	public function setExternal($external) {
-		$this->external = $external;
-		return $this;
-	}
+    /**
+     * @param array $dependencies
+     * @return Asset
+     */
+    public function setDependencies($dependencies)
+    {
+        $this->dependencies = $dependencies;
+        return $this;
+    }
 
-	/**
-	 * @return boolean
-	 */
-	public function getExternal() {
-		return $this->external;
-	}
+    /**
+     * @return string
+     */
+    public function getType()
+    {
+        return $this->type;
+    }
 
-	/**
-	 * @param boolean $standalone
-	 * @return Tx_Vhs_Asset
-	 */
-	public function setStandalone($standalone) {
-		$this->standalone = $standalone;
-		return $this;
-	}
+    /**
+     * @param string $type
+     * @return Asset
+     */
+    public function setType($type)
+    {
+        $this->type = $type;
+        if ('css' == strtolower($type)) {
+            $this->setMovable(false);
+        }
+        return $this;
+    }
 
-	/**
-	 * @return boolean
-	 */
-	public function getStandalone() {
-		return $this->standalone;
-	}
+    /**
+     * @param boolean $external
+     * @return Asset
+     */
+    public function setExternal($external)
+    {
+        $this->external = $external;
+        return $this;
+    }
 
-	/**
-	 * @return string
-	 */
-	public function getName() {
-		return $this->name;
-	}
+    /**
+     * @return boolean
+     */
+    public function getExternal()
+    {
+        return $this->external;
+    }
 
-	/**
-	 * @param string $name
-	 * @return Tx_Vhs_Asset
-	 */
-	public function setName($name) {
-		$this->name = $name;
-		return $this;
-	}
+    /**
+     * @param boolean $rewrite
+     * @return Asset
+     */
+    public function setRewrite($rewrite)
+    {
+        $this->rewrite = $rewrite;
+        return $this;
+    }
 
-	/**
-	 * @return string
-	 */
-	public function getContent() {
-		if (TRUE === empty($this->content) && NULL !== $this->path && file_exists(t3lib_div::getFileAbsFileName($this->path))) {
-			return file_get_contents(t3lib_div::getFileAbsFileName($this->path));
-		}
-		return $this->content;
-	}
+    /**
+     * @return boolean
+     */
+    public function getRewrite()
+    {
+        return $this->rewrite;
+    }
 
-	/**
-	 * @param string $content
-	 * @return Tx_Vhs_Asset
-	 */
-	public function setContent($content) {
-		$this->content = $content;
-		return $this;
-	}
+    /**
+     * @param boolean $standalone
+     * @return Asset
+     */
+    public function setStandalone($standalone)
+    {
+        $this->standalone = $standalone;
+        return $this;
+    }
 
-	/**
-	 * @return string
-	 */
-	public function getPath() {
-		return $this->path;
-	}
+    /**
+     * @return boolean
+     */
+    public function getStandalone()
+    {
+        return $this->standalone;
+    }
 
-	/**
-	 * @param string $path
-	 * @return Tx_Vhs_Asset
-	 */
-	public function setPath($path) {
-		if (NULL === $path) {
-			$this->path = NULL;
-			return $this;
-		}
-		if (FALSE === strpos($path, '://')) {
-			$path = t3lib_div::getFileAbsFileName($path);
-		}
-		if (NULL === $this->type) {
-			$this->setType(pathinfo($path, PATHINFO_EXTENSION));
-		}
-		if (NULL === $this->name) {
-			$this->setName(pathinfo($path, PATHINFO_FILENAME));
-		}
-		$this->path = $path;
-		return $this;
-	}
+    /**
+     * @param boolean $async
+     * @return Asset
+     */
+    public function setAsync($async)
+    {
+        $this->async = $async;
+        return $this;
+    }
 
-	/**
-	 * @return boolean
-	 */
-	public function getNamedChunks() {
-		return $this->namedChunks;
-	}
+    /**
+     * @return boolean
+     */
+    public function getAsync()
+    {
+        return $this->async;
+    }
 
-	/**
-	 * @param boolean $namedChunks
-	 * @return Tx_Vhs_Asset
-	 */
-	public function setNamedChunks($namedChunks) {
-		$this->namedChunks = $namedChunks;
-		return $this;
-	}
+    /**
+     * @param boolean $defer
+     * @return Asset
+     */
+    public function setDefer($defer)
+    {
+        $this->defer = $defer;
+        return $this;
+    }
 
-	/**
-	 * @return boolean
-	 */
-	public function getFluid() {
-		return $this->fluid;
-	}
+    /**
+     * @return boolean
+     */
+    public function getDefer()
+    {
+        return $this->defer;
+    }
 
-	/**
-	 * @param boolean $fluid
-	 * @return Tx_Vhs_Asset
-	 */
-	public function setFluid($fluid) {
-		$this->fluid = $fluid;
-		return $this;
-	}
+    /**
+     * @return string
+     */
+    public function getName()
+    {
+        return $this->name;
+    }
 
-	/**
-	 * @return array
-	 */
-	public function getVariables() {
-		return $this->variables;
-	}
+    /**
+     * @param string $name
+     * @return Asset
+     */
+    public function setName($name)
+    {
+        $this->name = $name;
+        return $this;
+    }
 
-	/**
-	 * @param array $variables
-	 * @return Tx_Vhs_Asset
-	 */
-	public function setVariables($variables) {
-		$this->variables = $variables;
-		return $this;
-	}
+    /**
+     * @return string
+     */
+    public function getContent()
+    {
+        $path = (0 === strpos($this->path, '/') ? $this->path : GeneralUtility::getFileAbsFileName($this->path));
+        if (true === empty($this->content) && null !== $this->path && file_exists($path)) {
+            return file_get_contents($path);
+        }
+        return $this->content;
+    }
 
-	/**
-	 * Returns the settings used by this particular Asset
-	 * during inclusion. Public access allows later inspection
-	 * of the TypoScript values which were applied to the Asset.
-	 *
-	 * @return array
-	 */
-	public function getSettings() {
-		if (NULL === self::$settingsCache) {
-			$allTypoScript = $this->configurationManager->getConfiguration(Tx_Extbase_Configuration_ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
-			$settingsExist = isset($allTypoScript['plugin.']['tx_vhs.']['settings.']);
-			if (TRUE === $settingsExist) {
-				self::$settingsCache = t3lib_div::removeDotsFromTS($allTypoScript['plugin.']['tx_vhs.']['settings.']);
-			}
-		}
-		$settings = (array) self::$settingsCache;
-		$properties = get_class_vars(get_class($this));
-		foreach (array_keys($properties) as $propertyName) {
-			$properties[$propertyName] = $this->$propertyName;
-		}
-		$settings = t3lib_div::array_merge_recursive_overrule($settings, $this->settings);
-		$settings = t3lib_div::array_merge_recursive_overrule($settings, $properties);
-		return $settings;
-	}
+    /**
+     * @param string $content
+     * @return Asset
+     */
+    public function setContent($content)
+    {
+        $this->content = $content;
+        return $this;
+    }
 
-	/**
-	 * @param array $settings
-	 * @return Tx_Vhs_Assets
-	 */
-	public function setSettings($settings) {
-		$this->settings = $settings;
-		return $this;
-	}
+    /**
+     * @return string
+     */
+    public function getPath()
+    {
+        return $this->path;
+    }
 
-	/**
-	 * @return array
-	 */
-	public function getAssetSettings() {
-		return $this->getSettings();
-	}
+    /**
+     * @param string $path
+     * @return Asset
+     */
+    public function setPath($path)
+    {
+        if (null === $path) {
+            $this->path = null;
+            return $this;
+        }
+        if (false === strpos($path, '://') && 0 !== strpos($path, '/')) {
+            $path = GeneralUtility::getFileAbsFileName($path);
+        }
+        if (null === $this->type) {
+            $this->setType(pathinfo($path, PATHINFO_EXTENSION));
+        }
+        if (null === $this->name) {
+            $this->setName(pathinfo($path, PATHINFO_FILENAME));
+        }
+        $this->path = $path;
+        return $this;
+    }
 
-	/**
-	 * @return boolean
-	 */
-	public function getMovable() {
-		return $this->movable;
-	}
+    /**
+     * @return boolean
+     */
+    public function getNamedChunks()
+    {
+        return $this->namedChunks;
+    }
 
-	/**
-	 * @param boolean $movable
-	 * @return $this
-	 */
-	public function setMovable($movable) {
-		$this->movable = $movable;
-		return $this;
-	}
+    /**
+     * @param boolean $namedChunks
+     * @return Asset
+     */
+    public function setNamedChunks($namedChunks)
+    {
+        $this->namedChunks = $namedChunks;
+        return $this;
+    }
 
-	/**
-	 * @return boolean
-	 */
-	public function getRemoved() {
-		return $this->removed;
-	}
+    /**
+     * @return boolean
+     */
+    public function getFluid()
+    {
+        return $this->fluid;
+    }
 
-	/**
-	 * @param boolean $removed
-	 * @return Tx_Vhs_Asset
-	 */
-	public function setRemoved($removed) {
-		$this->removed = $removed;
-		return $this;
-	}
+    /**
+     * @param boolean $fluid
+     * @return Asset
+     */
+    public function setFluid($fluid)
+    {
+        $this->fluid = $fluid;
+        return $this;
+    }
 
-	/**
-	 * Allows public access to debug this particular Asset
-	 * instance later, when including the Asset in the page.
-	 *
-	 * @return array
-	 */
-	public function getDebugInformation() {
-		return $this->getSettings();
-	}
+    /**
+     * @return array
+     */
+    public function getVariables()
+    {
+        return $this->variables;
+    }
 
-	/**
-	 * Returns TRUE of settings specify that the source of this
-	 * Asset should be rendered as if it were a Fluid template,
-	 * using variables from the "arguments" attribute
-	 *
-	 * @return boolean
-	 */
-	public function assertFluidEnabled() {
-		return $this->getFluid();
-	}
+    /**
+     * @param array $variables
+     * @return Asset
+     */
+    public function setVariables($variables)
+    {
+        $this->variables = $variables;
+        return $this;
+    }
 
-	/**
-	 * Returns TRUE if settings specify that the name of each Asset
-	 * should be placed above the built content when placed in merged
-	 * Asset cache files.
-	 *
-	 * @return boolean
-	 */
-	public function assertAddNameCommentWithChunk() {
-		return $this->getNamedChunks();
-	}
+    /**
+     * Returns the settings used by this particular Asset
+     * during inclusion. Public access allows later inspection
+     * of the TypoScript values which were applied to the Asset.
+     *
+     * @return array
+     */
+    public function getSettings()
+    {
+        if (null === static::$settingsCache) {
+            $allTypoScript = $this->configurationManager->getConfiguration(
+                ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT
+            );
+            $settingsExist = isset($allTypoScript['plugin.']['tx_vhs.']['settings.']);
+            if (true === $settingsExist) {
+                static::$settingsCache = GeneralUtility::removeDotsFromTS(
+                    $allTypoScript['plugin.']['tx_vhs.']['settings.']
+                );
+            }
+        }
+        $settings = (array) static::$settingsCache;
+        $properties = get_class_vars(get_class($this));
+        foreach (array_keys($properties) as $propertyName) {
+            $properties[$propertyName] = $this->$propertyName;
+        }
 
-	/**
-	 * Returns TRUE if the current Asset should be debugged as commanded
-	 * by settings in TypoScript an/ord ViewHelper attributes.
-	 *
-	 * @return boolean
-	 */
-	public function assertDebugEnabled() {
-		$settings = $this->getSettings();
-		$enabled = (TRUE === isset($settings['debug']) ? (boolean) $settings['debug'] : FALSE);
-		return $enabled;
-	}
+        ArrayUtility::mergeRecursiveWithOverrule($settings, $this->settings);
+        ArrayUtility::mergeRecursiveWithOverrule($settings, $properties);
+        return $settings;
+    }
 
-	/**
-	 * @return boolean
-	 */
-	public function assertAllowedInFooter() {
-		return $this->getMovable();
-	}
+    /**
+     * @param array $settings
+     * @return Asset
+     */
+    public function setSettings($settings)
+    {
+        $this->settings = $settings;
+        return $this;
+    }
 
-	/**
-	 * @return boolean
-	 */
-	public function assertHasBeenRemoved() {
-		return $this->getRemoved();
-	}
+    /**
+     * @return array
+     */
+    public function getAssetSettings()
+    {
+        return $this->getSettings();
+    }
 
+    /**
+     * @return boolean
+     */
+    public function getMovable()
+    {
+        return $this->movable;
+    }
+
+    /**
+     * @param boolean $movable
+     * @return $this
+     */
+    public function setMovable($movable)
+    {
+        $this->movable = $movable;
+        return $this;
+    }
+
+    /**
+     * @return boolean
+     */
+    public function getRemoved()
+    {
+        return $this->removed;
+    }
+
+    /**
+     * @param boolean $removed
+     * @return Asset
+     */
+    public function setRemoved($removed)
+    {
+        $this->removed = $removed;
+        return $this;
+    }
+
+    /**
+     * Allows public access to debug this particular Asset
+     * instance later, when including the Asset in the page.
+     *
+     * @return array
+     */
+    public function getDebugInformation()
+    {
+        return $this->getSettings();
+    }
+
+    /**
+     * Returns TRUE of settings specify that the source of this
+     * Asset should be rendered as if it were a Fluid template,
+     * using variables from the "arguments" attribute
+     *
+     * @return boolean
+     */
+    public function assertFluidEnabled()
+    {
+        return $this->getFluid();
+    }
+
+    /**
+     * Returns TRUE if settings specify that the name of each Asset
+     * should be placed above the built content when placed in merged
+     * Asset cache files.
+     *
+     * @return boolean
+     */
+    public function assertAddNameCommentWithChunk()
+    {
+        return $this->getNamedChunks();
+    }
+
+    /**
+     * Returns TRUE if the current Asset should be debugged as commanded
+     * by settings in TypoScript an/ord ViewHelper attributes.
+     *
+     * @return boolean
+     */
+    public function assertDebugEnabled()
+    {
+        $settings = $this->getSettings();
+        $enabled = (true === isset($settings['debug']) ? (boolean) $settings['debug'] : false);
+        return $enabled;
+    }
+
+    /**
+     * @return boolean
+     */
+    public function assertAllowedInFooter()
+    {
+        return $this->getMovable();
+    }
+
+    /**
+     * @return boolean
+     */
+    public function assertHasBeenRemoved()
+    {
+        return $this->getRemoved();
+    }
 }

@@ -1,140 +1,173 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\Format\Json;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Tests\Fixtures\Domain\Model\Foo;
+use FluidTYPO3\Vhs\Tests\Fixtures\Domain\Model\LegacyFoo;
+use FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\AbstractViewHelperTest;
+use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
+use TYPO3\CMS\Extbase\Persistence\ObjectStorage;
 
 /**
- * @protection on
- * @author Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- * @package Vhs
+ * Class EncodeViewHelperTest
  */
-class Tx_Vhs_ViewHelpers_Format_Json_EncodeViewHelperTest extends Tx_Vhs_ViewHelpers_AbstractViewHelperTest {
+class EncodeViewHelperTest extends AbstractViewHelperTest
+{
 
-	/**
-	 * @test
-	 */
-	public function encodesDateTime() {
-		$dateTime = DateTime::createFromFormat('U', 86400);
-		$instance = $this->createInstance();
-		$test = $this->callInaccessibleMethod($instance, 'encodeValue', $dateTime, FALSE, TRUE, NULL, NULL);
-		$this->assertEquals(86400000, $test);
-	}
+    protected function getInstanceOfFoo()
+    {
+        if (version_compare(ExtensionManagementUtility::getExtensionVersion('fluid'), 9.3, '>=')) {
+            return new Foo();
+        }
+        return new LegacyFoo();
+    }
 
-	/**
-	 * @test
-	 */
-	public function encodesRecursiveDomainObject() {
-		/** @var Tx_Vhs_Tests_Fixtures_Domain_Model_Foo $object */
-		$object = $this->objectManager->get('Tx_Vhs_Tests_Fixtures_Domain_Model_Foo');
-		$object->setFoo($object);
-		$instance = $this->createInstance();
-		$test = $this->callInaccessibleMethod($instance, 'encodeValue', $object, TRUE, TRUE, NULL, NULL);
-		$this->assertEquals('{"bar":"baz","children":[],"foo":null,"pid":null,"uid":null}', $test);
-	}
+    /**
+     * @test
+     */
+    public function encodesDateTime()
+    {
+        $dateTime = \DateTime::createFromFormat('U', 86400);
+        $instance = $this->createInstance();
+        $test = $this->callInaccessibleMethod($instance, 'encodeValue', $dateTime, false, true, null, null);
+        $this->assertEquals(86400000, $test);
+    }
 
-	/**
-	 * @test
-	 */
-	public function encodesDateTimeWithFormat() {
-		$dateTime = DateTime::createFromFormat('U', 86401);
-		$arguments = array(
-			'value' => array(
-				'date' => $dateTime,
-			),
-			'dateTimeFormat' => 'Y-m-d',
-		);
-		$test = $test = $this->executeViewHelper($arguments);
-		$this->assertEquals('{"date":"1970-01-02"}', $test);
-	}
+    /**
+     * @test
+     */
+    public function encodesRecursiveDomainObject()
+    {
+        /** @var Foo $object */
+        $object = $this->getInstanceOfFoo();
+        $object->setFoo($object);
+        $instance = $this->createInstance();
+        $test = $this->callInaccessibleMethod($instance, 'encodeValue', $object, true, true, null, null);
+        $this->assertEquals('{"bar":"baz","children":[],"foo":null,"name":null,"pid":null,"uid":null}', $test);
+    }
 
-	/**
-	 * @test
-	 */
-	public function encodesTraversable() {
-		$traversable = $this->objectManager->get('Tx_Extbase_Persistence_ObjectStorage');
-		$instance = $this->createInstance();
-		$test = $this->callInaccessibleMethod($instance, 'encodeValue', $traversable, FALSE, TRUE, NULL, NULL);
-		$this->assertEquals('[]', $test);
-	}
+    /**
+     * @test
+     */
+    public function encodesDateTimeWithFormat()
+    {
+        $dateTime = \DateTime::createFromFormat('U', 86401);
+        $arguments = [
+            'value' => [
+                'date' => $dateTime,
+            ],
+            'dateTimeFormat' => 'Y-m-d',
+        ];
+        $test = $this->executeViewHelper($arguments);
+        $this->assertEquals('{"date":"1970-01-02"}', $test);
+    }
 
-	/**
-	 * @test
-	 */
-	public function returnsEmptyJsonObjectForEmptyArguments() {
-		$viewHelper = $this->getMock('Tx_Vhs_ViewHelpers_Format_Json_EncodeViewHelper', array('renderChildren'));
-		$viewHelper->expects($this->once())->method('renderChildren')->will($this->returnValue(NULL));
+    /**
+     * @test
+     */
+    public function encodesTraversable()
+    {
+        $traversable = $this->objectManager->get(ObjectStorage::class);
+        $instance = $this->createInstance();
+        $test = $this->callInaccessibleMethod($instance, 'encodeValue', $traversable, false, true, null, null);
+        $this->assertEquals('[]', $test);
+    }
 
-		$this->assertEquals('{}', $viewHelper->render());
-	}
+    /**
+     * @test
+     */
+    public function returnsEmptyObjectOnTopLevel()
+    {
+        $this->assertEquals('{}', $this->executeViewHelper(['value' => new \stdClass()]));
+    }
 
-	/**
-	 * @test
-	 */
-	public function returnsExpectedStringForProvidedArguments() {
+    /**
+     * @test
+     */
+    public function returnsEmptyArrayOnTopLevel()
+    {
+        $this->assertEquals('[]', $this->executeViewHelper(['value' => []]));
+    }
 
-		$storage = $this->objectManager->get('Tx_Extbase_Persistence_ObjectStorage');
-		$fixture = array(
-			'foo' => 'bar',
-			'bar' => TRUE,
-			'baz' => 1,
-			'foobar' => NULL,
-			'date' => DateTime::createFromFormat('U', 3216548),
-			'traversable' => $storage
-		);
+    /**
+     * @test
+     */
+    public function returnsFalseOnTopLevel()
+    {
+        $this->assertEquals('false', $this->executeViewHelper(['value' => false]));
+    }
 
-		$expected = '{"foo":"bar","bar":true,"baz":1,"foobar":null,"date":3216548000,"traversable":[]}';
+    /**
+     * @test
+     */
+    public function returnsTrueOnTopLevel()
+    {
+        $this->assertEquals('true', $this->executeViewHelper(['value' => true]));
+    }
 
-		$viewHelper = $this->getMock('Tx_Vhs_ViewHelpers_Format_Json_EncodeViewHelper', array('renderChildren'));
-		$viewHelper->expects($this->once())->method('renderChildren')->will($this->returnValue($fixture));
+    /**
+     * @test
+     */
+    public function returnsNumberOnTopLevel()
+    {
+        $this->assertEquals('1.0', $this->executeViewHelper(['value' => 1.0]));
+    }
 
-		$this->assertEquals($expected, $viewHelper->render());
-	}
+    /**
+     * @test
+     */
+    public function returnsNullOnTopLevel()
+    {
+        $this->assertEquals('null', $this->executeViewHelper(['value' => null]));
+    }
 
-	/**
-	 * @test
-	 */
-	public function throwsExceptionForInvalidArgument() {
-		$viewHelper = $this->getMock('Tx_Vhs_ViewHelpers_Format_Json_EncodeViewHelper', array('renderChildren'));
-		$viewHelper->expects($this->once())->method('renderChildren')->will($this->returnValue("\xB1\x31"));
+    /**
+     * @test
+     */
+    public function returnsExpectedStringForProvidedArguments()
+    {
 
-		$this->setExpectedException('Tx_Fluid_Core_ViewHelper_Exception');
-		$this->assertEquals('null', $viewHelper->render());
-	}
+        $storage = $this->objectManager->get('TYPO3\\CMS\\Extbase\\Persistence\\ObjectStorage');
+        $fixture = [
+            'foo' => 'bar',
+            'bar' => true,
+            'baz' => 1,
+            'foobar' => null,
+            'date' => \DateTime::createFromFormat('U', 3216548),
+            'traversable' => $storage
+        ];
 
-	/**
-	 * @test
-	 */
-	public function returnsJsConsumableTimestamps() {
-		$date = new \DateTime('now');
-		$jsTimestamp = $date->getTimestamp() * 1000;
+        $expected = '{"foo":"bar","bar":true,"baz":1,"foobar":null,"date":3216548000,"traversable":[]}';
 
-		$fixture = array('foo' => $date, 'bar' => array('baz' => $date));
-		$expected = sprintf('{"foo":%s,"bar":{"baz":%s}}', $jsTimestamp, $jsTimestamp);
+        $this->assertEquals($expected, $this->executeViewHelper(['value' => $fixture]));
+    }
 
-		$viewHelper = $this->getMock('Tx_Vhs_ViewHelpers_Format_Json_EncodeViewHelper', array('renderChildren'));
-		$viewHelper->expects($this->once())->method('renderChildren')->will($this->returnValue($fixture));
+    /**
+     * @test
+     */
+    public function throwsExceptionForInvalidArgument()
+    {
+        $this->expectViewHelperException();
+        $this->assertEquals('null', $this->executeViewHelper(['value' => "\xB1\x31"]));
+    }
 
-		$this->assertEquals($expected, $viewHelper->render());
-	}
+    /**
+     * @test
+     */
+    public function returnsJsConsumableTimestamps()
+    {
+        $date = new \DateTime('now');
+        $jsTimestamp = $date->getTimestamp() * 1000;
 
+        $fixture = ['foo' => $date, 'bar' => ['baz' => $date]];
+        $expected = sprintf('{"foo":%s,"bar":{"baz":%s}}', $jsTimestamp, $jsTimestamp);
+
+        $this->assertEquals($expected, $this->executeViewHelper(['value' => $fixture]));
+    }
 }

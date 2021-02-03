@@ -1,27 +1,17 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use TYPO3\CMS\Extbase\Utility\LocalizationUtility;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithContentArgumentAndRenderStatic;
 
 /**
  * ### L (localisation) ViewHelper
@@ -37,51 +27,74 @@
  *     <v:l>some.label</v:l>
  *     <v:l key="some.label" />
  *     <v:l arguments="{0: 'foo', 1: 'bar'}">some.label</v:l>
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers
  */
-class Tx_Vhs_ViewHelpers_LViewHelper extends Tx_Fluid_ViewHelpers_TranslateViewHelper {
+class LViewHelper extends AbstractViewHelper
+{
+    use CompileWithContentArgumentAndRenderStatic;
 
-	/**
-	 * Render method
-	 * @return string
-	 */
-	public function render() {
-		if (TRUE === isset($this->arguments['id']) && FALSE === empty($this->arguments['id'])) {
-			$id = $this->arguments['id'];
-		} else {
-			$id = $this->arguments['key'];
-		}
-		$default = $this->arguments['default'];
-		$htmlEscape = $this->arguments['htmlEscape'];
-		$arguments = $this->arguments['arguments'];
-		$extensionName = $this->arguments['extensionName'];
-		if (NULL === $id) {
-			$id = $this->renderChildren();
-		}
-		if (NULL === $default) {
-			$default = $id;
-		}
-		if (NULL === $extensionName) {
-			if (method_exists($this, 'getControllerContext')) {
-				$request = $this->getControllerContext()->getRequest();
-			} else {
-    			$request = $this->controllerContext->getRequest();
-			}
-			$extensionName = $request->getControllerExtensionName();
-		}
-		$value = Tx_Extbase_Utility_Localization::translate($id, $extensionName, $arguments);
-		if (NULL === $value) {
-			$value = $default;
-			if (is_array($arguments)) {
-				$value = vsprintf($value, $arguments);
-			}
-		} elseif ($htmlEscape) {
-			$value = htmlspecialchars($value);
-		}
-		return $value;
-	}
+    /**
+     * @var boolean
+     */
+    protected $escapeChildren = false;
+
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
+
+    /**
+     * Initialize arguments
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('key', 'string', 'Translation Key');
+        $this->registerArgument(
+            'default',
+            'string',
+            'if the given locallang key could not be found, this value is used. If this argument is not set, ' .
+            'child nodes will be used to render the default'
+        );
+        $this->registerArgument(
+            'htmlEscape',
+            'boolean',
+            'TRUE if the result should be htmlescaped. This won\'t have an effect for the default value'
+        );
+        $this->registerArgument('arguments', 'array', 'Arguments to be replaced in the resulting string');
+        $this->registerArgument('extensionName', 'string', 'UpperCamelCased extension key (for example BlogExample)');
+    }
+
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return mixed
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        $default = $arguments['default'];
+        $htmlEscape = (boolean) $arguments['htmlEscape'];
+        $extensionName = $arguments['extensionName'];
+        $translationArguments = $arguments['arguments'];
+        $id = $renderChildrenClosure();
+        if (true === empty($default)) {
+            $default = $id;
+        }
+        if (true === empty($extensionName)) {
+            $extensionName = $renderingContext->getControllerContext()->getRequest()->getControllerExtensionName();
+        }
+        $value = LocalizationUtility::translate($id, $extensionName, $translationArguments);
+        if (true === empty($value)) {
+            $value = $default;
+            if (true === is_array($translationArguments)) {
+                $value = vsprintf($value, $translationArguments);
+            }
+        } elseif (true === $htmlEscape) {
+            $value = htmlspecialchars($value);
+        }
+        return $value;
+    }
 
 }

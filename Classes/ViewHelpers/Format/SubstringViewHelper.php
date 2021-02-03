@@ -1,53 +1,57 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Format;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithContentArgumentAndRenderStatic;
 
 /**
- * Gets a substring from a string or string-compatible value
+ * Gets a substring from a string or string-compatible value.
  *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Format
+ * Also see the `<f:format.crop>` view helper.
  */
-class Tx_Vhs_ViewHelpers_Format_SubstringViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class SubstringViewHelper extends AbstractViewHelper
+{
+    use CompileWithContentArgumentAndRenderStatic;
 
-	/**
-	 * Substrings a string or string-compatible value
-	 *
-	 * @param string $content Content string to substring
-	 * @param integer $start Positive or negative offset
-	 * @param integer $length Positive or negative length
-	 * @return string
-	 */
-	public function render($content = NULL, $start = 0, $length = NULL) {
-		if ($content === NULL) {
-			$content = $this->renderChildren();
-		}
-		if ($length !== NULL) {
-			return substr($content, $start, $length);
-		}
-		return substr($content, $start);
-	}
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('content', 'string', 'Content string to substring');
+        $this->registerArgument('start', 'integer', 'Positive or negative offset', false, 0);
+        $this->registerArgument('length', 'integer', 'Positive or negative length');
+    }
 
+    /**
+     * Substrings a string or string-compatible value
+     *
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return mixed
+     */
+    public static function renderStatic(array $arguments, \Closure $renderChildrenClosure, RenderingContextInterface $renderingContext)
+    {
+        $content = $renderChildrenClosure();
+        $start = (integer) $arguments['start'];
+        $length = $arguments['length'];
+        if (null !== $length) {
+            if ($length < 0) {
+                // mb_substr does not support negative length, therefore we must calculate the length based on
+                // original string length and offset, so we can pass a positive integer to mb_substr.
+                $length = $length + mb_strlen($content) - $start;
+            }
+            return mb_substr($content, $start, $length);
+        }
+        return mb_substr($content, $start);
+    }
 }

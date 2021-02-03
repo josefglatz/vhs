@@ -1,27 +1,15 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Render;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithContentArgumentAndRenderStatic;
 
 /**
  * ### Render: Inline
@@ -34,43 +22,47 @@
  * any and all changes in variables that happen while
  * rendering this inline code will be destroyed after
  * sub-rendering is finished.
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Render
  */
-class Tx_Vhs_ViewHelpers_Render_InlineViewHelper extends Tx_Vhs_ViewHelpers_Render_AbstractRenderViewHelper {
+class InlineViewHelper extends AbstractRenderViewHelper
+{
+    use CompileWithContentArgumentAndRenderStatic;
 
-	/**
-	 * Initialize arguments
-	 *
-	 * @return void
-	 */
-	public function initializeArguments() {
-		parent::initializeArguments();
-		$this->registerArgument('namespaces', 'array', 'Optional additional/overridden namespaces, array("ns" => "Tx_MyExt_ViewHelpers")', FALSE, array());
-	}
+    /**
+     * @var boolean
+     */
+    protected $escapeChildren = false;
 
-	/**
-	 * Renders an outside string as if it were Fluid code,
-	 * using additional (or overridden) namespaces if so
-	 * desired.
-	 *
-	 * @param string $content
-	 * @return string
-	 */
-	public function render($content = NULL) {
-		if ($content === NULL) {
-			$content = $this->renderChildren();
-		}
-		$namespaces = $this->getPreparedNamespaces();
-		$namespaceHeader = implode(LF, $namespaces);
-		foreach ($namespaces as $namespace) {
-			$content = str_replace($namespace, '', $content);
-		}
-		$view = $this->getPreparedClonedView();
-		$view->setTemplateSource($namespaceHeader . $content);
-		return $this->renderView($view);
-	}
+    /**
+     * Initialize arguments
+     *
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('content', 'string', 'Template code to render as Fluid (usually from a variable)');
+        $this->registerArgument(
+            'namespaces',
+            'array',
+            'Optional additional/overridden namespaces, ["ns" => "MyVendor\\MyExt\\ViewHelpers"]',
+            false,
+            []
+        );
+        parent::initializeArguments();
+    }
 
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        $content = $renderChildrenClosure();
+        $namespaces = static::getPreparedNamespaces($arguments);
+        $namespaceHeader = implode(LF, $namespaces);
+        foreach ($namespaces as $namespace) {
+            $content = str_replace($namespace, '', $content);
+        }
+        $view = static::getPreparedClonedView($renderingContext);
+        $view->setTemplateSource($namespaceHeader . $content);
+        return static::renderView($view, $arguments);
+    }
 }

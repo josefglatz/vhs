@@ -1,27 +1,19 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Iterator;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Andreas Lappe <nd@kaeufli.ch>, kaeufli.ch
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use Psr\Log\LoggerInterface;
+use TYPO3\CMS\Core\Log\LogManager;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Reflection\ObjectAccess;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
  * ### Iterator / Extract VieWHelper
@@ -37,20 +29,20 @@
  *
  * #### Input from extbase version of indexed_search">
  *
- *     array(
- *	       0 => array(
+ *     [
+ *         0 => [
  *             'sword' => 'firstWord',
  *             'oper' => 'AND'
- *         ),
- *         1 => array(
+ *         ],
+ *         1 => [
  *             'sword' => 'secondWord',
  *             'oper' => 'AND'
- *         ),
- *         3 => array(
+ *         ],
+ *         3 => [
  *             'sword' => 'thirdWord',
  *             'oper' => 'AND'
- *         )
- *     )
+ *         ]
+ *     ]
  *
  * Show the previous search words in the search form of the
  * result page:
@@ -77,99 +69,150 @@
  *
  * #### Complex example
  *
- *     {anArray->v:iterator.extract(path: 'childProperty.secondNestedChildObject')->v:iterator.sort(direction: 'DESC', sortBy: 'propertyOnSecondChild')->v:iterator.slice(length: 10)->v:iterator.extract(key: 'uid')}
+ *     {anArray->v:iterator.extract(path: 'childProperty.secondNestedChildObject')
+ *         -> v:iterator.sort(direction: 'DESC', sortBy: 'propertyOnSecondChild')
+ *         -> v:iterator.slice(length: 10)->v:iterator.extract(key: 'uid')}
  *
- * @author Andreas Lappe <nd@kaeufli.ch>
- * @package Vhs
- * @subpackage ViewHelpers\Iterator
+ * #### Single return value
+ *
+ *     Outputs the "uid" value of the first record in variable $someRecords without caring if there are more than
+ *     one records. Always extracts the first value and then stops. Equivalent of chaning -> v:iterator.first().
+ *     {someRecords -> v:iterator.extract(key: 'uid', single: TRUE)}
  */
-class Tx_Vhs_ViewHelpers_Iterator_ExtractViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class ExtractViewHelper extends AbstractViewHelper
+{
+    /**
+     * @var boolean
+     */
+    protected $escapeChildren = false;
 
-	/**
-	 * @param string $key
-	 * @param Traversable $content
-	 * @param boolean $recursive
-	 * @return array
-	 */
-	public function render($key, $content = NULL, $recursive = TRUE) {
-		if (NULL === $content) {
-			$content = $this->renderChildren();
-		}
-		try {
-			if (TRUE === (boolean) $recursive) {
-				$result = $this->recursivelyExtractKey($content, $key);
-			} else {
-				$result = $this->extractByKey($content, $key);
-			}
-		} catch (Exception $error) {
-			t3lib_div::sysLog($error->getMessage(), 'vhs', t3lib_div::SYSLOG_SEVERITY_WARNING);
-			$result = array();
-		}
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
 
-		return $result;
-	}
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('content', 'mixed', 'The array or Iterator that contains either the value or arrays of values');
+        $this->registerArgument('key', 'string', 'The name of the key from which you wish to extract the value', true);
+        $this->registerArgument('recursive', 'boolean', 'If TRUE, attempts to extract the key from deep nested arrays', false, true);
+        $this->registerArgument('single', 'boolean', 'If TRUE, returns only one value - always the first one - instead of an array of values', false, false);
+    }
 
-	/**
-	 * Extract by key
-	 *
-	 * @param Traversable $iterator
-	 * @param string $key
-	 * @return mixed NULL or whatever we found at $key
-	 * @throws Exception
-	 */
-	public function extractByKey($iterator, $key) {
-		if (FALSE === is_array($iterator) && FALSE === $iterator instanceof Traversable) {
-			throw new Exception('Traversable object or array expected but received ' . gettype($iterator), 1361532490);
-		}
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return mixed
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        $content = $arguments['content'] ?? $renderChildrenClosure();
+        $key = $arguments['key'];
+        $recursive = (boolean) $arguments['recursive'];
+        $single = (boolean) $arguments['single'];
+        try {
+            // extraction from Iterators could potentially use a getter method which throws
+            // exceptions - although this would be bad practice. Catch the exception here
+            // and turn it into a WARNING log message so that output does not break.
+            if (true === (boolean) $recursive) {
+                $result = static::recursivelyExtractKey($content, $key);
+            } else {
+                $result = static::extractByKey($content, $key);
+            }
+        } catch (\Exception $error) {
+            if (class_exists(LogManager::class)) {
+                GeneralUtility::makeInstance(LogManager::class)->getLogger(__CLASS__)->warning($error->getMessage(), ['content' => $content]);
+            } else {
+                GeneralUtility::sysLog($error->getMessage(), 'vhs', GeneralUtility::SYSLOG_SEVERITY_WARNING);
+            }
+            $result = [];
+        }
 
-		$result = Tx_Extbase_Reflection_ObjectAccess::getPropertyPath($iterator, $key);
+        if (true === (boolean) $single) {
+            return reset($result);
+        }
 
-		return $result;
-	}
+        return $result;
+    }
 
-	/**
-	 * Recursively extract the key
-	 *
-	 * @param Traversable $iterator
-	 * @param string $key
-	 * @return string
-	 * @throws Exception
-	 */
-	public function recursivelyExtractKey($iterator, $key) {
-		$content = array();
+    /**
+     * Extract by key
+     *
+     * @param \Traversable $iterator
+     * @param string $key
+     * @return mixed NULL or whatever we found at $key
+     * @throws \Exception
+     */
+    protected static function extractByKey($iterator, $key)
+    {
+        if (false === is_array($iterator) && false === $iterator instanceof \Traversable) {
+            throw new \Exception('Traversable object or array expected but received ' . gettype($iterator), 1361532490);
+        }
 
-		foreach ($iterator as $k => $v) {
-			// Lets see if we find something directly:
-			$result = Tx_Extbase_Reflection_ObjectAccess::getPropertyPath($v, $key);
-			if (NULL !== $result) {
-				$content[] = $result;
-			} elseif (TRUE === is_array($v) || TRUE === $v instanceof Traversable) {
-				$content[] = $this->recursivelyExtractKey($v, $key);
-			}
-		}
+        $result = ObjectAccess::getPropertyPath($iterator, $key);
 
-		$content = $this->flattenArray($content);
+        return $result;
+    }
 
-		return $content;
-	}
+    /**
+     * Recursively extract the key
+     *
+     * @param \Traversable $iterator
+     * @param string $key
+     * @return string
+     * @throws \Exception
+     */
+    protected static function recursivelyExtractKey($iterator, $key)
+    {
+        if (false === is_array($iterator) && false === $iterator instanceof \Traversable) {
+            throw new \Exception('Traversable object or array expected but received ' . gettype($iterator), 1515498714);
+        }
 
-	/**
-	 * Flatten the result structure, to iterate it cleanly in fluid
-	 *
-	 * @param array $content
-	 * @param array $flattened
-	 * @return array
-	 */
-	public function flattenArray(array $content, $flattened = NULL) {
-		foreach ($content as $sub) {
-			if (is_array($sub)) {
-				$flattened = $this->flattenArray($sub, $flattened);
-			} else {
-				$flattened[] = $sub;
-			}
-		}
+        $content = [];
 
-		return $flattened;
-	}
+        foreach ($iterator as $v) {
+            // Lets see if we find something directly:
+            $result = ObjectAccess::getPropertyPath($v, $key);
+            if (null !== $result) {
+                $content[] = $result;
+            } elseif (true === is_array($v) || true === $v instanceof \Traversable) {
+                $content[] = static::recursivelyExtractKey($v, $key);
+            }
+        }
 
+        $content = static::flattenArray($content);
+
+        return $content;
+    }
+
+    /**
+     * Flatten the result structure, to iterate it cleanly in fluid
+     *
+     * @param array $content
+     * @param array $flattened
+     * @return array
+     */
+    protected static function flattenArray(array $content, $flattened = null)
+    {
+        if (empty($content)) {
+            return $content;
+        }
+
+        foreach ($content as $sub) {
+            if (true === is_array($sub)) {
+                $flattened = static::flattenArray($sub, $flattened);
+            } else {
+                $flattened[] = $sub;
+            }
+        }
+
+        return $flattened;
+    }
 }

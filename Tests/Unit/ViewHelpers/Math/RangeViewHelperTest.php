@@ -1,54 +1,31 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\Math;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
 
 /**
- * @protection off
- * @author Claus Due <claus@wildside.dk>
- * @package Vhs
+ * Class RangeViewHelperTest
  */
-class Tx_Vhs_ViewHelpers_Math_RangeViewHelperTest extends Tx_Vhs_ViewHelpers_Math_AbstractMathViewHelperTest {
+class RangeViewHelperTest extends AbstractMathViewHelperTest
+{
+    /**
+     * @test
+     */
+    public function testSingleArgumentIteratorSingleValue()
+    {
+        $this->executeSingleArgumentTest([2], [2, 2]);
+    }
 
-	/**
-	 * @test
-	 */
-	public function testSingleArgumentNotIteratorPassesThrough() {
-		$this->executeSingleArgumentTest(1, 1);
-	}
-
-	/**
-	 * @test
-	 */
-	public function testSingleArgumentIteratorSingleValue() {
-		$this->executeSingleArgumentTest(array(2), array(2, 2));
-	}
-
-	/**
-	 * @test
-	 */
-	public function testSingleArgumentIteratorMultipleValues() {
-		$this->executeSingleArgumentTest(array(2, 4, 6, 3, 8), array(2, 8));
-	}
-
+    /**
+     * @test
+     */
+    public function testSingleArgumentIteratorMultipleValues()
+    {
+        $this->executeSingleArgumentTest([2, 4, 6, 3, 8], [2, 8]);
+    }
 }

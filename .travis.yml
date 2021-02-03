@@ -1,30 +1,49 @@
 language: php
-php:
-  - 5.3
-  - 5.4
-  - 5.5
 
-env:
-  - DB=mysql
+sudo: false
+
+php:
+  - "7.0"
+
+matrix:
+  include:
+    - php: "7.0"
+      env: COVERAGE="NO" TYPO3_VERSION="^8.7"
+    - php: "7.1"
+      env: COVERAGE="NO" TYPO3_VERSION="^8.7"
+    - php: "7.2"
+      env: COVERAGE="YES" TYPO3_VERSION="^8.7"
+    - php: "7.3"
+      env: COVERAGE="NO" TYPO3_VERSION="^9"
+    - php: "7.4"
+      env: COVERAGE="NO" TYPO3_VERSION="^9"
+    - php: "7.4"
+      name: TYPO3 master
+      env: COVERAGE="NO" TYPO3_VERSION="dev-master"
+    - php: "7.4"
+      name: PHP notices
+      env: COVERAGE="NO" TYPO3_VERSION="^9" FORCE_ERROR_MODE="1039"
+    - php: "7.4"
+      name: PHP deprecations
+      env: COVERAGE="NO" TYPO3_VERSION="^9" FORCE_ERROR_MODE="24583"
+  allow_failures:
+    - env: COVERAGE="NO" TYPO3_VERSION="dev-master"
+    - env: COVERAGE="NO" TYPO3_VERSION="^9" FORCE_ERROR_MODE="1039"
+    - env: COVERAGE="NO" TYPO3_VERSION="^9" FORCE_ERROR_MODE="24583"
+
+cache:
+  directories:
+    - $HOME/.composer/cache
 
 before_script:
-  - export REPOSITORY="vhs"
-  - git clone https://github.com/FluidTYPO3/TYPO3-Travis-Integration.git build-environment
-  - source build-environment/install-utilities.sh
-  - source build-environment/install-preserve-repository.sh
-  - source build-environment/install-helper.sh
-  - source build-environment/install-typo3.sh
-  - source build-environment/install-reintegrate-repository.sh
-  - source build-environment/install-phpunit-setup.sh
+  - mkdir -p build/logs
+  - export TYPO3_PATH_WEB=$PWD/build/web
 
-script:
-# initial, quick inspection
-  - php build-environment/FluidTYPO3-CodingStandards/commit_message_inspector.php $PWD/typo3conf/ext/$REPOSITORY
-# install extension
-  - php $PWD/typo3/cli_dispatch.phpsh extbase builder:install $REPOSITORY
-# phplint checking on all PHP source files in extension
-  - php $PWD/typo3/cli_dispatch.phpsh extbase builder:phpsyntax --extension $REPOSITORY
-# PHPCodeSniffer code inspection with only errors displayed (no warnings)
-  - $PWD/build-environment/CodeSniffer/scripts/phpcs -n --standard=$PWD/build-environment/FluidTYPO3-CodingStandards/ruleset.xml $PWD/typo3conf/ext/$REPOSITORY
-# PHPUnit tests from overridden phpunit tests configuration file
-  - php $PWD/typo3/cli_dispatch.phpsh phpunit -c phpunit.xml
+install:
+  - composer require "typo3/cms-core:$TYPO3_VERSION"
+
+script: if [[ "$COVERAGE" != "NO" ]]; then ./vendor/bin/phpunit --coverage-clover=build/logs/clover.xml; else ./vendor/bin/phpunit; fi
+
+after_script:
+  - ln -s Classes src
+  - if [[ "$COVERAGE" != "NO" ]]; then ./vendor/bin/coveralls; fi

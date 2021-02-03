@@ -1,27 +1,17 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Page\Header;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due, Wildside A/S <claus@wildside.dk>
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Traits\PageRendererTrait;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
  * ### ViewHelper used to override page title
@@ -36,7 +26,7 @@
  * or 2 (two) to indicate that the TS-controlled page title
  * must be disabled. A value of 2 (two) ensures that the title
  * used in this ViewHelper will be used in the rendered page.
- * 
+ *
  * If you use the ViewHelper in a plugin it has to be USER
  * not USER_INT, what means it has to be cached!
  *
@@ -52,39 +42,53 @@
  * Enforcing use of the core behavior is the only way to ensure
  * that this ViewHelper can coexist with other extensions in
  * a fully controllable way.
- *
- * @author Georg Ringer
- * @package Vhs
- * @subpackage ViewHelpers\Page\Header
  */
-class Tx_Vhs_ViewHelpers_Page_Header_TitleViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class TitleViewHelper extends AbstractViewHelper
+{
+    use CompileWithRenderStatic;
+    use PageRendererTrait;
 
-	/**
-	 * Arguments initialization
-	 *
-	 * @return void
-	 */
-	public function initializeArguments() {
-		$this->registerArgument('title', 'string', 'Title tag content');
-		$this->registerArgument('whitespaceString', 'string', 'String used to replace groups of white space characters, one replacement inserted per group', FALSE, ' ');
-	}
+    /**
+     * Arguments initialization
+     *
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('title', 'string', 'Title tag content');
+        $this->registerArgument(
+            'whitespaceString',
+            'string',
+            'String used to replace groups of white space characters, one replacement inserted per group',
+            false,
+            ' '
+        );
+        $this->registerArgument('setIndexedDocTitle', 'boolean', 'Set indexed doc title to title', false, false);
+    }
 
-	/**
-	 * Render method
-	 *
-	 * @return void
-	 */
-	public function render() {
-		if (TYPO3_MODE == 'BE') {
-			return;
-		}
-		if (!empty($this->arguments['title'])) {
-			$title = $this->arguments['title'];
-		} else {
-			$title = $this->renderChildren();
-		}
-		$title = trim(preg_replace( '/\s+/', $this->arguments['whitespaceString'], $title), $this->arguments['whitespaceString']);
-		$GLOBALS['TSFE']->getPageRenderer()->setTitle($title);
-	}
-
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return mixed
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        if ('BE' === TYPO3_MODE) {
+            return;
+        }
+        if (false === empty($arguments['title'])) {
+            $title = $arguments['title'];
+        } else {
+            $title = $renderChildrenClosure();
+        }
+        $title = trim(preg_replace('/\s+/', $arguments['whitespaceString'], $title), $arguments['whitespaceString']);
+        static::getPageRenderer()->setTitle($title);
+        if (true === $arguments['setIndexedDocTitle']) {
+            $GLOBALS['TSFE']->indexedDocTitle = $title;
+        }
+    }
 }

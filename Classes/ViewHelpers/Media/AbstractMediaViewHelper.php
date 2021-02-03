@@ -1,83 +1,91 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Media;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
 
 /**
- * Base class for media related view helpers
- *
- * @author Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- * @package Vhs
- * @subpackage ViewHelpers\Media
+ * Base class for media related view helpers.
  */
-abstract class Tx_Vhs_ViewHelpers_Media_AbstractMediaViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractTagBasedViewHelper {
+abstract class AbstractMediaViewHelper extends AbstractTagBasedViewHelper
+{
 
-	/**
-	 *
-	 * @var string
-	 */
-	protected $mediaSource;
+    /**
+     *
+     * @var string
+     */
+    protected $mediaSource;
 
-	/**
-	 * Initialize arguments.
-	 *
-	 * @return void
-	 * @api
-	 */
-	public function initializeArguments() {
-		$this->registerArgument('src', 'mixed', 'Path to the media resource(s). Can contain single or multiple paths for videos (either CSV, array or implementing Traversable).', TRUE);
-		$this->registerArgument('relative', 'boolean', 'If FALSE media URIs are rendered absolute. URIs in backend mode are always absolute.', FALSE, TRUE);
-	}
+    /**
+     * Initialize arguments.
+     *
+     * @return void
+     * @api
+     */
+    public function initializeArguments()
+    {
+        parent::initializeArguments();
+        $this->registerArgument(
+            'src',
+            'mixed',
+            'Path to the media resource(s). Can contain single or multiple paths for videos/audio (either CSV, ' .
+            'array or implementing Traversable).',
+            true
+        );
+        $this->registerArgument(
+            'relative',
+            'boolean',
+            'If FALSE media URIs are rendered absolute. URIs in backend mode are always absolute.',
+            false,
+            true
+        );
+    }
 
-	/**
-	 * Turns a relative source URI into an absolute URL
-	 * if required
-	 *
-	 * @param string $src
-	 * @return string
-	 */
-	public function preprocessSourceUri($src) {
-		if (TYPO3_MODE === 'BE' || FALSE === (boolean) $this->arguments['relative']) {
-			$src = t3lib_div::getIndpEnv('TYPO3_SITE_URL') . $src;
-		}
-		return $src;
-	}
+    /**
+     * Turns a relative source URI into an absolute URL
+     * if required
+     *
+     * @param string $src
+     * @param array $arguments
+     * @return string
+     */
+    public static function preprocessSourceUri($src, array $arguments)
+    {
+        $src = str_replace('%2F', '/', rawurlencode($src));
+        if (substr($src, 0, 1) !== '/' && substr($src, 0, 4) !== 'http') {
+            $src = $GLOBALS['TSFE']->absRefPrefix . $src;
+        }
+        if (false === empty($GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_vhs.']['settings.']['prependPath'])) {
+            $src = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_vhs.']['settings.']['prependPath'] . $src;
+        } elseif ('BE' === TYPO3_MODE || false === (boolean) $arguments['relative']) {
+            $src = GeneralUtility::getIndpEnv('TYPO3_SITE_URL') . ltrim($src, '/');
+        }
+        return $src;
+    }
 
-	/**
-	 * Returns an array of sources resolved from src argument
-	 * which can be either an array, CSV or implement Traversable
-	 * to be consumed by ViewHelpers handling multiple sources.
-	 *
-	 * @return array
-	 */
-	public function getSourcesFromArgument() {
-		$src = $this->arguments['src'];
-		if ($src instanceof Traversable) {
-			$src = iterator_to_array($src);
-		} elseif (is_string($src)) {
-			$src = t3lib_div::trimExplode(',', $src, TRUE);
-		}
-		return $src;
-	}
-
+    /**
+     * Returns an array of sources resolved from src argument
+     * which can be either an array, CSV or implement Traversable
+     * to be consumed by ViewHelpers handling multiple sources.
+     *
+     * @param array $arguments
+     * @return array
+     */
+    public static function getSourcesFromArgument(array $arguments)
+    {
+        $src = $arguments['src'];
+        if ($src instanceof \Traversable) {
+            $src = iterator_to_array($src);
+        } elseif (true === is_string($src)) {
+            $src = GeneralUtility::trimExplode(',', $src, true);
+        }
+        return $src;
+    }
 }

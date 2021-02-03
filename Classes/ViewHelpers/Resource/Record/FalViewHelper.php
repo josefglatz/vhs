@@ -1,74 +1,230 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Resource\Record;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Danilo Bürger <danilo.buerger@hmspl.de>, Heimspiel GmbH
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Utility\ResourceUtility;
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Database\Query\QueryBuilder;
+use TYPO3\CMS\Core\Resource\Exception\ResourceDoesNotExistException;
+use TYPO3\CMS\Core\Resource\FileReference;
+use TYPO3\CMS\Core\Resource\FileRepository;
+use TYPO3\CMS\Core\Resource\ResourceFactory;
+use TYPO3\CMS\Core\Utility\ArrayUtility;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Versioning\VersionState;
 
 /**
- * @author Danilo Bürger <danilo.buerger@hmspl.de>, Heimspiel GmbH
- * @package Vhs
- * @subpackage ViewHelpers\Resource\Record
+ * Resolve FAL relations and return file records.
+ *
+ * ### Render a single image linked from a TCA record
+ *
+ * We assume that the table `tx_users` has a column `photo`, which is a FAL
+ * relation field configured with
+ * [`ExtensionManagementUtility::getFileFieldTCAConfig()`]
+ * (https://docs.typo3.org/typo3cms/TCAReference/Reference/Columns/Inline/Index.html#file-abstraction-layer).
+ * The template also has a `user` variable containing one of the table's
+ * records.
+ *
+ * At first, fetch the record and store it in a variable.
+ * Then use `<f:image>` to render it:
+ *
+ *     {v:resource.record.fal(table: 'tx_users', field: 'photo', record: user)
+ *      -> v:iterator.first()
+ *      -> v:variable.set(name: 'image')}
+ *     <f:if condition="{image}">
+ *       <f:image treatIdAsReference="1" src="{image.id}" title="{image.title}" alt="{image.alternative}"/>
+ *     </f:if>
+ *
+ * Use the `uid` attribute if you don't have a `record`.
  */
-class Tx_Vhs_ViewHelpers_Resource_Record_FalViewHelper extends Tx_Vhs_ViewHelpers_Resource_Record_AbstractRecordResourceViewHelper {
+class FalViewHelper extends AbstractRecordResourceViewHelper
+{
 
-	/**
-	 * @var \TYPO3\CMS\Core\Resource\ResourceFactory
-	 */
-	protected $resourceFactory;
+    /**
+     * @var \TYPO3\CMS\Core\Resource\ResourceFactory
+     */
+    protected $resourceFactory;
 
-	/**
-	 * Constructor
-	 */
-	public function __construct() {
-		$this->resourceFactory = t3lib_div::makeInstance('TYPO3\\CMS\\Core\\Resource\\ResourceFactory');
-	}
+    /**
+     * @var \TYPO3\CMS\Core\Resource\FileRepository
+     */
+    protected $fileRepository;
 
-	/**
-	 * @param mixed $identity
-	 * @return mixed
-	 */
-	public function getResource($identity) {
-		$fileReference = $this->resourceFactory->getFileReferenceObject(intval($identity));
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
 
-		return $fileReference->toArray();
-	}
+    /**
+     * Constructor
+     */
+    public function __construct()
+    {
+        $this->resourceFactory = GeneralUtility::makeInstance(ResourceFactory::class);
+        $this->fileRepository = GeneralUtility::makeInstance(FileRepository::class);
+    }
 
-	/**
-	 * @param array $record
-	 * @return array
-	 */
-	public function getResources($record) {
-		$sqlTable = $GLOBALS['TYPO3_DB']->fullQuoteStr($this->getTable(), 'sys_file_reference');
-		$sqlField = $GLOBALS['TYPO3_DB']->fullQuoteStr($this->getField(), 'sys_file_reference');
-		$sqlRecordUid = $GLOBALS['TYPO3_DB']->fullQuoteStr($record[$this->idField], 'sys_file_reference');
+    public function initializeArguments()
+    {
+        parent::initializeArguments();
+        $this->registerArgument(
+            'asObjects',
+            'bool',
+            'Can be set to TRUE to return objects instead of file information arrays.',
+            false,
+            false
+        );
+    }
 
-		$res = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid', 'sys_file_reference', 'deleted = 0 AND hidden = 0 AND tablenames = ' . $sqlTable . ' AND fieldname = ' . $sqlField . ' AND uid_foreign = ' . $sqlRecordUid);
+    /**
+     * @param FileReference $fileReference
+     * @return array
+     */
+    public function getResource($fileReference)
+    {
+        $file = $fileReference->getOriginalFile();
+        $fileReferenceProperties = $fileReference->getProperties();
+        $fileProperties = ResourceUtility::getFileArray($file);
+        ArrayUtility::mergeRecursiveWithOverrule($fileProperties, $fileReferenceProperties, true, true, false);
+        return $fileProperties;
+    }
 
-		$resources = array();
-		while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res)) {
-			$resources[] = $this->getResource($row['uid']);
-		}
+    /**
+     * Fetch a fileReference from the file repository
+     *
+     * @param string $table name of the table to get the file reference for
+     * @param string $field name of the field referencing a file
+     * @param array|integer $uidOrRecord Database row
+     * @return array
+     */
+    protected function getFileReferences($table, $field, $uidOrRecord)
+    {
+        if (is_array($uidOrRecord)) {
+            $record = $uidOrRecord;
+        } else {
+            $record = $this->getRecord($uidOrRecord);
+            if (!is_array($record)) {
+                return [];
+            }
+        }
 
-		return $resources;
-	}
+        if (isset($record['t3ver_oid']) && (integer) $record['t3ver_oid'] !== 0) {
+            $sqlRecordUid = $record['t3ver_oid'];
+        } elseif (isset($record['_LOCALIZED_UID'])) {
+            $sqlRecordUid = $record['_LOCALIZED_UID'];
+        } else {
+            $sqlRecordUid = $record[$this->idField];
+        }
+        $fileObjects = $this->fileRepository->findByRelation($table, $field, $sqlRecordUid);
+        return $fileObjects;
+    }
 
+    /**
+     * @param array $record
+     * @return array
+     */
+    public function getResources($record)
+    {
+        if (!is_array($record)) {
+            return [];
+        }
+        if (!empty($GLOBALS['TSFE']->sys_page)) {
+            $fileReferences = $this->getFileReferences($this->getTable(), $this->getField(), $record);
+        } else {
+            if (isset($record['t3ver_oid']) && (integer) $record['t3ver_oid'] !== 0) {
+                $sqlRecordUid = $record['t3ver_oid'];
+            } elseif (isset($record['_LOCALIZED_UID'])) {
+                $sqlRecordUid = $record['_LOCALIZED_UID'];
+            } else {
+                $sqlRecordUid = $record[$this->idField];
+            }
+
+            /** @var QueryBuilder $queryBuilder */
+            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_file_reference');
+
+            $queryBuilder->createNamedParameter($this->getTable(), \PDO::PARAM_STR, ':tablenames');
+            $queryBuilder->createNamedParameter($sqlRecordUid, \PDO::PARAM_INT, ':uid_foreign');
+            $queryBuilder->createNamedParameter($this->getField(), \PDO::PARAM_STR, ':fieldname');
+
+            $queryBuilder
+                ->select('uid')
+                ->from('sys_file_reference')
+                ->where(
+                    $queryBuilder->expr()->eq('tablenames', ':tablenames')
+                )
+                ->andWhere(
+                    $queryBuilder->expr()->eq('uid_foreign', ':uid_foreign' )
+                )
+                ->andWhere(
+                    $queryBuilder->expr()->eq('fieldname', ':fieldname')
+                );
+
+            if ($GLOBALS['BE_USER']->workspaceRec['uid']) {
+                $queryBuilder->createNamedParameter($GLOBALS['BE_USER']->workspaceRec['uid'], \PDO::PARAM_INT, ':t3ver_wsid');
+                $queryBuilder
+                    ->andWhere(
+                        $queryBuilder->expr()->eq('deleted', 0)
+                    )
+                    ->andWhere(
+                        $queryBuilder->expr()->eq('t3ver_wsid', 0)
+                        . ' OR ' .
+                        $queryBuilder->expr()->eq('t3ver_wsid', ':t3ver_wsid')
+                    )
+                    ->andWhere(
+                        $queryBuilder->expr()->neq('pid', -1)
+                    );
+            } else {
+                $queryBuilder
+                    ->andWhere(
+                        $queryBuilder->expr()->eq('deleted', 0)
+                    )
+                    ->andWhere(
+                        $queryBuilder->expr()->lte('t3ver_state', 0)
+                    )
+                    ->andWhere(
+                        $queryBuilder->expr()->neq('pid', -1)
+                    )
+                    ->andWhere(
+                        $queryBuilder->expr()->eq('hidden', 0)
+                    );
+            }
+
+            // Execute
+            $references = $queryBuilder
+                ->orderBy('sorting_foreign')
+                ->execute()
+                ->fetchAll();
+
+            $fileReferences = [];
+
+            foreach ($references as $reference) {
+                try {
+                    // Just passing the reference uid, the factory is doing workspace
+                    // overlays automatically depending on the current environment
+                    $fileReferences[] = $this->resourceFactory->getFileReferenceObject($reference['uid']);
+                } catch (ResourceDoesNotExistException $exception) {
+                    // No handling, just omit the invalid reference uid
+                    continue;
+                }
+            }
+        }
+        $resources = [];
+        foreach ($fileReferences as $file) {
+            // Exclude workspace deleted files references
+            if ($file->getProperty('t3ver_state') !== VersionState::DELETE_PLACEHOLDER) {
+                try {
+                    $resources[] = $this->arguments['asObjects'] ? $file : $this->getResource($file);
+                } catch (\InvalidArgumentException $error) {
+                    // Pokemon-style, catch-all and suppress. This exception type is thrown if a file gets removed.
+                }
+            }
+        }
+        return $resources;
+    }
 }

@@ -1,27 +1,14 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Math;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithContentArgumentAndRenderStatic;
 
 /**
  * Math: Round
@@ -29,27 +16,34 @@
  * Rounds off $a which can be either an array-accessible
  * value (Iterator+ArrayAccess || array) or a raw numeric
  * value.
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Math
  */
-class Tx_Vhs_ViewHelpers_Math_RoundViewHelper extends Tx_Vhs_ViewHelpers_Math_AbstractSingleMathViewHelper {
+class RoundViewHelper extends AbstractSingleMathViewHelper
+{
+    use CompileWithContentArgumentAndRenderStatic;
 
-	/**
-	 * @return void
-	 */
-	public function initializeArguments() {
-		parent::initializeArguments();
-		$this->registerArgument('decimals', 'integer', 'Number of decimals', FALSE, 0);
-	}
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        parent::initializeArguments();
+        $this->registerArgument('decimals', 'integer', 'Number of decimals', false, 0);
+    }
 
-	/**
-	 * @param mixed $a
-	 * @return integer
-	 */
-	protected function calculateAction($a) {
-		return round($a, $this->arguments['decimals']);
-	}
-
+    /**
+     * @param mixed $a
+     * @param null $b
+     * @param array $arguments
+     * @return integer
+     */
+    protected static function calculateAction($a, $b, array $arguments)
+    {
+        if (static::assertIsArrayOrIterator($a)) {
+            foreach ($a as $index => $value) {
+                $a[$index] = static::calculateAction($value, $b, $arguments);
+            }
+            return $a;
+        }
+        return round($a, $arguments['decimals']);
+    }
 }

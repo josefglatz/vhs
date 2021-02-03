@@ -1,71 +1,84 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Page\Header;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Georg Ringer <typo3@ringerge.org>
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Traits\PageRendererTrait;
+use FluidTYPO3\Vhs\Traits\TagViewHelperTrait;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
 
 /**
  * ViewHelper used to render a meta tag
  *
  * If you use the ViewHelper in a plugin it has to be USER
  * not USER_INT, what means it has to be cached!
- *
- * @author Georg Ringer
- * @package Vhs
- * @subpackage ViewHelpers\Page\Header
  */
-class Tx_Vhs_ViewHelpers_Page_Header_MetaViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractTagBasedViewHelper {
+class MetaViewHelper extends AbstractTagBasedViewHelper
+{
 
-	/**
-	 * @var	string
-	 */
-	protected $tagName = 'meta';
+    use TagViewHelperTrait;
+    use PageRendererTrait;
 
-	/**
-	 * Arguments initialization
-	 *
-	 * @return void
-	 */
-	public function initializeArguments() {
-		$this->registerTagAttribute('name', 'string', 'Name property of meta tag');
-		$this->registerTagAttribute('content', 'string', 'Content of meta tag');
-		$this->registerTagAttribute('http-equiv', 'string', 'Property: http-equiv');
-		$this->registerTagAttribute('scheme', 'string', 'Property: scheme');
-		$this->registerTagAttribute('lang', 'string', 'Property: lang');
-		$this->registerTagAttribute('dir', 'string', 'Property: dir');
-	}
+    /**
+     * @var    string
+     */
+    protected $tagName = 'meta';
 
-	/**
-	 * Render method
-	 *
-	 * @return void
-	*/
-	public function render() {
-		if (TYPO3_MODE == 'BE') {
-			return;
-		}
-		if (isset($this->arguments['content']) && !empty($this->arguments['content'])) {
-			$GLOBALS['TSFE']->getPageRenderer()->addMetaTag($this->tag->render());
-		}
-	}
+    /**
+     * Arguments initialization
+     *
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        parent::initializeArguments();
+        $this->registerTagAttribute('name', 'string', 'Name property of meta tag');
+        $this->registerTagAttribute('http-equiv', 'string', 'Property: http-equiv');
+        $this->registerTagAttribute('property', 'string', 'Property of meta tag');
+        $this->registerTagAttribute('content', 'string', 'Content of meta tag');
+        $this->registerTagAttribute('scheme', 'string', 'Property: scheme');
+        $this->registerTagAttribute('lang', 'string', 'Property: lang');
+        $this->registerTagAttribute('dir', 'string', 'Property: dir');
+    }
 
+    /**
+     * Render method
+     *
+     * @return void
+     */
+    public function render()
+    {
+        if ('BE' === TYPO3_MODE) {
+            return;
+        }
+        $content = $this->arguments['content'];
+        if (!empty($content)) {
+            $pageRenderer = static::getPageRenderer();
+            if (!method_exists($pageRenderer, 'setMetaTag')) {
+                $pageRenderer->addMetaTag($this->renderTag($this->tagName, null, ['content' => $content]));
+            } else {
+                $properties = [];
+                $type = 'name';
+                $name = $this->tag->getAttribute('name');
+                if (!empty($this->tag->getAttribute('property'))) {
+                    $type = 'property';
+                    $name = $this->tag->getAttribute('property');
+                } elseif (!empty($this->tag->getAttribute('http-equiv'))) {
+                    $type = 'http-equiv';
+                    $name = $this->tag->getAttribute('http-equiv');
+                }
+                foreach (['http-equiv', 'property', 'scheme', 'lang', 'dir'] as $propertyName) {
+                    if (!empty($this->tag->getAttribute($propertyName))) {
+                        $properties[$propertyName] = $this->tag->getAttribute($propertyName);
+                    }
+                }
+                $pageRenderer->setMetaTag($type, $name, $content, $properties);
+            }
+        }
+    }
 }

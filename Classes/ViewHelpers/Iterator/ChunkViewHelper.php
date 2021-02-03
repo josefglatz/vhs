@@ -1,68 +1,102 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Iterator;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Traits\ArrayConsumingViewHelperTrait;
+use FluidTYPO3\Vhs\Traits\TemplateVariableViewHelperTrait;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
  * Creates chunks from an input Array/Traversable with option to allocate items to a fixed number of chunks
- *
- * @author Benjamin Rau <rau@codearts.at>, codearts
- * @package Vhs
- * @subpackage ViewHelpers\Iterator
  */
-class Tx_Vhs_ViewHelpers_Iterator_ChunkViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class ChunkViewHelper extends AbstractViewHelper
+{
+    use TemplateVariableViewHelperTrait;
+    use ArrayConsumingViewHelperTrait;
 
-	/**
-	 * Render method
-	 *
-	 * @param integer $count The count of items per chunk or if fixed number of chunks
-	 * @param boolean $fixed Whether to allocate items to a fixed number of chunks or not
-	 * @param mixed $subject The subject Traversable/Array instance to shift
-	 * @param string $as If specified, inserts a template variable with this name, then renders the child content, then removes the variable
-	 * @throws Exception
-	 * @return array
-	 */
-	public function render($count, $fixed = FALSE, $subject = NULL, $as = NULL) {
-		if (NULL === $subject) {
-			$subject = $this->renderChildren();
-		}
-		if (TRUE === $subject instanceof Traversable) {
-			$subject = iterator_to_array($subject, TRUE);
-		} elseif (FALSE === is_array($subject)) {
-			throw new Exception('Cannot get values of unsupported type: ' . gettype($subject), 1357098192);
-		}
-		if (TRUE === $fixed) {
-			$subjectSize = count($subject);
-			$chunkSize = ceil($subjectSize / $count);
-			$output = array_chunk($subject, $chunkSize);
-		} else {
-			$output = array_chunk($subject, $count);
-		}
-		if (NULL !== $as) {
-			$variables = array($as => $output);
-			$output = Tx_Vhs_Utility_ViewHelperUtility::renderChildrenWithVariables($this, $this->templateVariableContainer, $variables);
-		}
-		return $output;
-	}
+    /**
+     * @var boolean
+     */
+    protected $escapeChildren = false;
 
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
+
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('subject', 'mixed', 'The subject Traversable/Array instance to shift');
+        $this->registerArgument('count', 'integer', 'Number of items/chunk or if fixed then number of chunks', true);
+        $this->registerAsArgument();
+        $this->registerArgument(
+            'fixed',
+            'boolean',
+            'If true, creates $count chunks instead of $count values per chunk',
+            false,
+            false
+        );
+        $this->registerArgument(
+            'preserveKeys',
+            'boolean',
+            'If set to true, the original array keys will be preserved',
+            false,
+            false
+        );
+    }
+
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return array|mixed
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        $count = (integer) $arguments['count'];
+        $fixed = (boolean) $arguments['fixed'];
+        $preserveKeys = (boolean) $arguments['preserveKeys'];
+        $subject = static::arrayFromArrayOrTraversableOrCSVStatic(
+            empty($arguments['as']) ? ($arguments['subject'] ?? $renderChildrenClosure()) : $arguments['subject'],
+            $preserveKeys
+        );
+        $output = [];
+        if (0 >= $count) {
+            return $output;
+        }
+        if (true === (boolean) $fixed) {
+            $subjectSize = count($subject);
+            if (0 < $subjectSize) {
+                $chunkSize = ceil($subjectSize / $count);
+                $output = array_chunk($subject, $chunkSize, $preserveKeys);
+            }
+            // Fill the resulting array with empty items to get the desired element count
+            $elementCount = count($output);
+            if ($elementCount < $count) {
+                $output += array_fill($elementCount, $count - $elementCount, null);
+            }
+        } else {
+            $output = array_chunk($subject, $count, $preserveKeys);
+        }
+
+        return static::renderChildrenWithVariableOrReturnInputStatic(
+            $output,
+            $arguments['as'],
+            $renderingContext,
+            $renderChildrenClosure
+        );
+    }
 }

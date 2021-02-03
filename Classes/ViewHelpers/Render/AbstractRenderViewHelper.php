@@ -1,123 +1,152 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Render;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Utility\ViewHelperUtility;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
+use TYPO3\CMS\Extbase\Mvc\View\ViewInterface;
+use TYPO3\CMS\Extbase\Object\ObjectManager;
+use TYPO3\CMS\Extbase\Object\ObjectManagerInterface;
+use TYPO3\CMS\Fluid\View\StandaloneView;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
  * ### Base class for all rendering ViewHelpers.
  *
  * If errors occur they can be graciously ignored and
  * replaced by a small error message or the error itself.
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Render
  */
-abstract class Tx_Vhs_ViewHelpers_Render_AbstractRenderViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+abstract class AbstractRenderViewHelper extends AbstractViewHelper
+{
 
-	/**
-	 * @var Tx_Extbase_Object_ObjectManagerInterface
-	 */
-	protected $objectManager;
+    /**
+     * @var \TYPO3\CMS\Extbase\Object\ObjectManagerInterface
+     */
+    protected $objectManager;
 
-	/**
-	 * @var Tx_Extbase_Configuration_ConfigurationManagerInterface
-	 */
-	protected $configurationManager;
+    /**
+     * @var \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface
+     */
+    protected $configurationManager;
 
-	/**
-	 * @param Tx_Extbase_Object_ObjectManagerInterface $objectManager
-	 * @return void
-	 */
-	public function injectObjectManager(Tx_Extbase_Object_ObjectManagerInterface $objectManager) {
-		$this->objectManager = $objectManager;
-	}
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
 
-	/**
-	 * @param Tx_Extbase_Configuration_ConfigurationManagerInterface $configurationManager
-	 * @return void
-	 */
-	public function injectConfigurationManager(Tx_Extbase_Configuration_ConfigurationManagerInterface $configurationManager) {
-		$this->configurationManager = $configurationManager;
-	}
+    /**
+     * @param \TYPO3\CMS\Extbase\Object\ObjectManagerInterface $objectManager
+     * @return void
+     */
+    public function injectObjectManager(ObjectManagerInterface $objectManager)
+    {
+        $this->objectManager = $objectManager;
+    }
 
-	/**
-	 * Initialize arguments
-	 *
-	 * @return void
-	 */
-	public function initializeArguments() {
-		$this->registerArgument('onError', 'string', 'Optional error message to display if error occur while rendering. If NULL, lets the error Exception pass trough (and break rendering)', FALSE, NULL);
-		$this->registerArgument('graceful', 'boolean', 'If forced to FALSE, errors are not caught but rather "transmitted" as every other error would be', FALSE, FALSE);
-	}
+    /**
+     * @param \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface $configurationManager
+     * @return void
+     */
+    public function injectConfigurationManager(ConfigurationManagerInterface $configurationManager)
+    {
+        $this->configurationManager = $configurationManager;
+    }
 
-	/**
-	 * @return array
-	 */
-	protected function getPreparedNamespaces() {
-		$namespaces = array();
-		foreach ((array) $this->arguments['namespaces'] as $namespaceIdentifier => $namespace) {
-			$addedOverriddenNamespace = '{namespace ' . $namespaceIdentifier . '=' . $namespace . '}';
-			array_push($namespaces, $addedOverriddenNamespace);
-		}
-		return $namespaces;
-	}
+    /**
+     * Initialize arguments
+     *
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument(
+            'onError',
+            'string',
+            'Optional error message to display if error occur while rendering. If NULL, lets the error Exception ' .
+            'pass trough (and break rendering)',
+            false,
+            null
+        );
+        $this->registerArgument(
+            'graceful',
+            'boolean',
+            'If forced to FALSE, errors are not caught but rather "transmitted" as every other error would be',
+            false,
+            false
+        );
+    }
 
-	/**
-	 * @return Tx_Fluid_View_StandaloneView
-	 */
-	protected function getPreparedClonedView() {
-		$view = $this->getPreparedView();
-		$view->setControllerContext(clone $this->controllerContext);
-		$view->setFormat($this->controllerContext->getRequest()->getFormat());
-		$view->assignMultiple($this->templateVariableContainer->getAll());
-		return $view;
-	}
+    /**
+     * @param array $arguments
+     * @return array
+     */
+    protected static function getPreparedNamespaces(array $arguments)
+    {
+        $namespaces = [];
+        foreach ((array) $arguments['namespaces'] as $namespaceIdentifier => $namespace) {
+            $addedOverriddenNamespace = '{namespace ' . $namespaceIdentifier . '=' . $namespace . '}';
+            array_push($namespaces, $addedOverriddenNamespace);
+        }
+        return $namespaces;
+    }
 
-	/**
-	 * @return Tx_Fluid_View_StandaloneView
-	 */
-	protected function getPreparedView() {
-		/** @var $view Tx_Fluid_View_StandaloneView */
-		$view = $this->objectManager->get('Tx_Fluid_View_StandaloneView');
-		return $view;
-	}
+    /**
+     * @param RenderingContextInterface $renderingContext
+     * @return \TYPO3\CMS\Fluid\View\StandaloneView
+     */
+    protected static function getPreparedClonedView(RenderingContextInterface $renderingContext)
+    {
+        $view = static::getPreparedView();
+        if (method_exists($renderingContext, 'getControllerContext')) {
+            $controllerContext = clone $renderingContext->getControllerContext();
+            $view->setControllerContext($controllerContext);
+            $view->setFormat($controllerContext->getRequest()->getFormat());
+            $view->getRenderingContext()->setViewHelperVariableContainer($renderingContext->getViewHelperVariableContainer());
+        }
+        $view->assignMultiple(ViewHelperUtility::getVariableProviderFromRenderingContext($renderingContext)->getAll());
+        return $view;
+    }
 
-	/**
-	 * @param Tx_Extbase_MVC_View_ViewInterface $view
-	 * @throws Exception
-	 * @return string
-	 */
-	protected function renderView(Tx_Extbase_MVC_View_ViewInterface $view) {
-		try {
-			$content = $view->render();
-		} catch (Exception $error) {
-			if (!$this->arguments['graceful']) {
-				throw $error;
-			}
-			$content = $error->getMessage() . ' (' . $error->getCode() . ')';
-		}
-		return $content;
-	}
+    /**
+     * @param \TYPO3\CMS\Extbase\Mvc\View\ViewInterface $view
+     * @param array $arguments
+     * @throws \Exception
+     * @return string
+     */
+    protected static function renderView(ViewInterface $view, array $arguments)
+    {
+        try {
+            $content = $view->render();
+        } catch (\Exception $error) {
+            if (!$arguments['graceful']) {
+                throw $error;
+            }
+            $content = $error->getMessage() . ' (' . $error->getCode() . ')';
+        }
+        return $content;
+    }
 
+    /**
+     * @return \TYPO3\CMS\Fluid\View\StandaloneView
+     */
+    protected static function getPreparedView()
+    {
+        return static::getObjectManager()->get(StandaloneView::class);
+    }
+
+    /**
+     * @return ObjectManagerInterface
+     */
+    protected static function getObjectManager()
+    {
+        return GeneralUtility::makeInstance(ObjectManager::class);
+    }
 }

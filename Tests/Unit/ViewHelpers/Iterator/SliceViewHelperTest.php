@@ -1,33 +1,42 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\Iterator;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\AbstractViewHelperTest;
 
 /**
- * @protection on
- * @author Claus Due <claus@wildside.dk>
- * @package Vhs
+ * Class SliceViewHelperTest
  */
-class Tx_Vhs_ViewHelpers_Iterator_SliceViewHelperTest extends Tx_Vhs_ViewHelpers_AbstractViewHelperTest {
+class SliceViewHelperTest extends AbstractViewHelperTest
+{
 
+    /**
+     * @test
+     * @dataProvider getRenderTestValues
+     * @param array $arguments
+     * @param mixed $expectedValue
+     */
+    public function testRender(array $arguments, $expectedValue)
+    {
+        $this->assertEquals($this->executeViewHelper($arguments), $expectedValue);
+    }
+
+    /**
+     * @return array
+     */
+    public function getRenderTestValues()
+    {
+        return [
+            [['haystack' => [], 'length' => 0, 'start' => 0], []],
+            [['haystack' => ['foo', 'bar'], 'length' => 1, 'start' => 0], ['foo']],
+            [['haystack' => new \ArrayIterator(['foo', 'bar']), 'start' => 1, 'length' => 1, 'preserveKeys' => true], [1 => 'bar']],
+            [['haystack' => new \ArrayIterator(['foo', 'bar']), 'start' => 1, 'length' => 1, 'preserveKeys' => false], [0 => 'bar']],
+        ];
+    }
 }

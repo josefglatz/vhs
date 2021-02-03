@@ -1,27 +1,22 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Format;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Utility\ErrorUtility;
+use TYPO3\CMS\Core\Cache\CacheManager;
+use TYPO3\CMS\Core\Cache\Frontend\VariableFrontend;
+use TYPO3\CMS\Core\Utility\CommandUtility;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Exception;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithContentArgumentAndRenderStatic;
 
 /**
  * Markdown Transformation ViewHelper
@@ -34,88 +29,128 @@
  * - accept input from STDIN
  * - output to STDOUT
  * - place errors in STDERR
+ * - be executable according to `open_basedir` and others
+ * - exist within (one or more of) TYPO3's configured executable paths
  *
  * In other words, *NIX standard behavior must be used.
  *
  * See: http://daringfireball.net/projects/markdown/
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Format
  */
-class Tx_Vhs_ViewHelpers_Format_MarkdownViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class MarkdownViewHelper extends AbstractViewHelper
+{
+    use CompileWithContentArgumentAndRenderStatic;
 
-	/**
-	 * @var boolean
-	 */
-	protected $escapingInterceptorEnabled = FALSE;
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
 
-	/**
-	 * @var string
-	 */
-	protected $markdownExecutablePath;
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('text', 'string', 'Markdown to convert to HTML');
+        $this->registerArgument('trim', 'boolean', 'Trim content before converting', false, true);
+        $this->registerArgument('htmlentities', 'boolean', 'If true, escapes converted HTML', false, false);
+    }
 
-	/**
-	 * @param string $text
-	 * @param boolean $trim
-	 * @param boolean $htmlentities
-	 * @throws Exception
-	 * @return string
-	 */
-	public function render($text = NULL, $trim = TRUE, $htmlentities = FALSE) {
-		$this->markdownExecutablePath = trim(shell_exec('which markdown'));
-		if (is_executable($this->markdownExecutablePath) === FALSE) {
-			throw new Tx_Fluid_Core_ViewHelper_Exception('Use of Markdown requires the "markdown" shell utility to be installed ' .
-				'and accessible; this binary could not be found in any of your configured paths available to this script', 1350511561);
-		}
-		if ($text === NULL) {
-			$text = $this->renderChildren();
-		}
-		if ($trim) {
-			$text = trim($text);
-		}
-		if ($htmlentities) {
-			$text = htmlentities($text);
-		}
-		$transformed = $this->transform($text);
-		return $transformed;
-	}
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return mixed|null|string
+     * @throws Exception
+     */
+    public static function renderStatic(array $arguments, \Closure $renderChildrenClosure, RenderingContextInterface $renderingContext)
+    {
+        $trim = (boolean) $arguments['trim'];
+        $htmlentities = (boolean) $arguments['htmlentities'];
+        $text = $renderChildrenClosure();
+        if (null === $text) {
+            return null;
+        }
 
-	/**
-	 * @param string $text
-	 * @throws Exception
-	 * @return string
-	 */
-	public function transform($text) {
-		$descriptorspec = array(
-			0 => array('pipe', 'r'),
-			1 => array('pipe', 'w'),
-			2 => array('pipe', 'a')
-		);
+        $cacheIdentifier = sha1($text);
+        $fromCache = static::getCache()->get($cacheIdentifier);
+        if (!empty($fromCache)) {
+            return $fromCache;
+        }
 
-		$process = proc_open($this->markdownExecutablePath, $descriptorspec, $pipes, NULL, $GLOBALS['_ENV']);
+        $markdownExecutablePath = CommandUtility::getCommand('markdown');
+        if (false === is_executable($markdownExecutablePath)) {
+            ErrorUtility::throwViewHelperException(
+                'Use of Markdown requires the "markdown" shell utility to be installed and accessible; this binary ' .
+                'could not be found in any of your configured paths available to this script',
+                1350511561
+            );
+        }
+        if (true === (boolean) $trim) {
+            $text = trim($text);
+        }
+        if (true === (boolean) $htmlentities) {
+            $text = htmlentities($text);
+        }
+        $transformed = static::transform($text, $markdownExecutablePath);
+        static::getCache()->set($cacheIdentifier, $transformed);
+        return $transformed;
+    }
 
-		stream_set_blocking($pipes[0], 1);
-		stream_set_blocking($pipes[1], 1);
-		stream_set_blocking($pipes[2], 1);
+    /**
+     * @param string $text
+     * @param string $markdownExecutablePath
+     * @return string
+     */
+    public static function transform($text, $markdownExecutablePath)
+    {
+        $descriptorspec = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'a']
+        ];
 
-		fwrite($pipes[0], $text);
-		fclose($pipes[0]);
+        $process = proc_open($markdownExecutablePath, $descriptorspec, $pipes, null, $GLOBALS['_ENV']);
 
-		$transformed = stream_get_contents($pipes[1]);
-		fclose($pipes[1]);
+        stream_set_blocking($pipes[0], 1);
+        stream_set_blocking($pipes[1], 1);
+        stream_set_blocking($pipes[2], 1);
 
-		$errors = stream_get_contents($pipes[2]);
-		fclose($pipes[2]);
+        fwrite($pipes[0], $text);
+        fclose($pipes[0]);
 
-		$exitCode = proc_close($process);
+        $transformed = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
 
-		if (trim($errors) !== '') {
-			throw new Exception('There was an error while executing ' . $this->markdownExecutablePath . '. The return code was ' .
-				$exitCode . ' and the message reads: ' . $errors, 1350514144);
-		}
+        $errors = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
 
-		return $transformed;
-	}
+        $exitCode = proc_close($process);
 
+        if ('' !== trim($errors)) {
+            ErrorUtility::throwViewHelperException(
+                'There was an error while executing ' . $markdownExecutablePath . '. The return code was ' .
+                $exitCode . ' and the message reads: ' . $errors,
+                1350514144
+            );
+        }
+
+        return $transformed;
+    }
+
+    /**
+     * @return VariableFrontend
+     */
+    protected static function getCache()
+    {
+        static $cache;
+        if (!isset($cache)) {
+            if (isset($GLOBALS['typo3CacheManager'])) {
+                $cacheManager = $GLOBALS['typo3CacheManager'];
+            } else {
+                $cacheManager = GeneralUtility::makeInstance(CacheManager::class);
+            }
+            $cache = $cacheManager->getCache('vhs_markdown');
+        }
+        return $cache;
+    }
 }

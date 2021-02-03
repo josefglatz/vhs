@@ -1,79 +1,71 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Iterator;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Traits\ArrayConsumingViewHelperTrait;
+use FluidTYPO3\Vhs\Traits\TemplateVariableViewHelperTrait;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
- * Returns random element from array
- *
- * @author Björn Fromme, <fromme@dreipunktnull.com>, dreipunktnull
- * @package Vhs
- * @subpackage ViewHelpers\Iterator
+ * Returns random element from array.
  */
-class Tx_Vhs_ViewHelpers_Iterator_RandomViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class RandomViewHelper extends AbstractViewHelper
+{
+    use TemplateVariableViewHelperTrait;
+    use ArrayConsumingViewHelperTrait;
 
-	/**
-	 * Initialize arguments
-	 *
-	 * @return void
-	 */
-	public function initializeArguments() {
-		$this->registerArgument('as', 'string', 'Which variable to update in the TemplateVariableContainer. If left out, returns the random element instead of updating the variable', FALSE);
-	}
+    /**
+     * @var boolean
+     */
+    protected $escapeChildren = false;
 
-	/**
-	 * Render method
-	 *
-	 * @param mixed $subject
-	 * @throws Tx_Fluid_Core_ViewHelper_Exception
-	 * @return mixed
-	 */
-	public function render($subject = NULL) {
-		if (NULL === $subject && (FALSE === isset($as) || TRUE === empty($as))) {
-			$subject = $this->renderChildren();
-		}
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
 
-		$as = $this->arguments['as'];
-		$array = NULL;
-		if (TRUE === is_array($subject)) {
-			$array = $subject;
-		} else {
-			if (TRUE === ($subject instanceof Iterator)) {
-				$array = iterator_to_array($subject, TRUE);
-			} elseif (TRUE === ($subject instanceof Tx_Extbase_Persistence_QueryResultInterface) || TRUE === ($subject instanceof TYPO3\CMS\Extbase\Persistence\QueryResultInterface)) {
-				/** @var Tx_Extbase_Persistence_QueryResultInterface $subject */
-				$array = $subject->toArray();
-			} elseif (NULL !== $subject) {
-				throw new Tx_Fluid_Core_ViewHelper_Exception('Invalid variable type passed to Iterator/RandomViewHelper. Expected any of Array, QueryResult, ' .
-				' ObjectStorage or Iterator implementation but got ' . gettype($subject), 1370966821);
-			}
-		}
-		$randomElement = $array[array_rand($array)];
-		if (TRUE === isset($as) && FALSE === empty($as)) {
-			$variables = array($as => $randomElement);
-			$content = Tx_Vhs_Utility_ViewHelperUtility::renderChildrenWithVariables($this, $this->templateVariableContainer, $variables);
-			return $content;
-		}
-		return $randomElement;
-	}
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument(
+            'subject',
+            'mixed',
+            'The subject Traversable/Array instance from which to select a random element'
+        );
+        $this->registerAsArgument();
+    }
+
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return mixed
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        $subject = static::arrayFromArrayOrTraversableOrCSVStatic(
+            static::arrayFromArrayOrTraversableOrCSVStatic(empty($arguments['as']) ? ($arguments['subject'] ?? $renderChildrenClosure()) : $arguments['subject'])
+        );
+        if (empty($subject)) {
+            return null;
+        }
+        return static::renderChildrenWithVariableOrReturnInputStatic(
+            $subject[array_rand($subject)],
+            $arguments['as'],
+            $renderingContext,
+            $renderChildrenClosure
+        );
+    }
 }

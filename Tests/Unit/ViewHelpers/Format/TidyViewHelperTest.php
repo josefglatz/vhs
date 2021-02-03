@@ -1,71 +1,48 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\Format;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\AbstractViewHelperTest;
+use FluidTYPO3\Vhs\ViewHelpers\Format\TidyViewHelper;
+use TYPO3\CMS\Fluid\Core\Rendering\RenderingContext;
 
 /**
- * @protection on
- * @author Claus Due <claus@wildside.dk>
- * @package Vhs
+ * Class TidyViewHelperTest
  */
-class Tx_Vhs_ViewHelpers_Format_TidyViewHelperTest extends Tx_Vhs_ViewHelpers_AbstractViewHelperTest {
+class TidyViewHelperTest extends AbstractViewHelperTest
+{
 
-	/**
-	 * @test
-	 */
-	public function throwsErrorWhenNoTidyIsInstalled() {
-		$instance = $this->createInstance();
-		Tx_Extbase_Reflection_ObjectAccess::setProperty($instance, 'hasTidy', FALSE, TRUE);
-		$this->setExpectedException('RuntimeException', NULL, 1352059753);
-		$instance->render('test');
-	}
+    /**
+     * @test
+     */
+    public function throwsErrorWhenNoTidyIsInstalled()
+    {
+        if (!class_exists('tidy')) {
+            // Note: CI setup has tidy on some but not all variants. We can only test for exceptions on those that don't.
+            $this->setExpectedException('RuntimeException', null, 1352059753);
+        }
+        TidyViewHelper::renderStatic(['content' => 'test', 'encoding' => 'utf8'], function () {}, $this->objectManager->get(RenderingContext::class));
+    }
 
-	/**
-	 * @test
-	 */
-	public function canTidySourceFromTagContent() {
-		$instance = $this->createInstance();
-		if (FALSE === Tx_Extbase_Reflection_ObjectAccess::getProperty($instance, 'hasTidy', TRUE)) {
-			return;
-		}
-		$source = '<foo> <bar>
+    /**
+     * @test
+     */
+    public function canTidySource()
+    {
+        $instance = $this->createInstance();
+        if (false === class_exists('tidy')) {
+            $this->markTestSkipped('No tidy support');
+            return;
+        }
+        $source = '<foo> <bar>
 			</bar>			</foo>';
-		$test = $this->executeViewHelperUsingTagContent('Text', $source);
-		$this->assertNotSame($source, $test);
-	}
-
-	/**
-	 * @test
-	 */
-	public function canTidySourceFromArgument() {
-		$instance = $this->createInstance();
-		if (FALSE === Tx_Extbase_Reflection_ObjectAccess::getProperty($instance, 'hasTidy', TRUE)) {
-			return;
-		}
-		$source = '<foo> <bar>
-			</bar>			</foo>';
-		$test = $this->executeViewHelper(array('content' => $source));
-		$this->assertNotSame($source, $test);
-	}
-
+        $test = $this->executeViewHelper(['content' => $source, 'encoding' => 'utf8']);
+        $this->assertNotSame($source, $test);
+    }
 }

@@ -1,47 +1,50 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\Math;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
 
 /**
- * @protection off
- * @author Claus Due <claus@wildside.dk>
- * @package Vhs
+ * Class SubtractViewHelperTest
  */
-class Tx_Vhs_ViewHelpers_Math_SubtractViewHelperTest extends Tx_Vhs_ViewHelpers_Math_AbstractMathViewHelperTest {
+class SubtractViewHelperTest extends AbstractMathViewHelperTest
+{
 
-	/**
-	 * @test
-	 */
-	public function testSingleArgumentIterator() {
-		$this->executeSingleArgumentTest(array(8, 2), -10);
-	}
+    /**
+     * @test
+     */
+    public function testSingleArgumentIterator()
+    {
+        $this->executeSingleArgumentTest([8, 2], -10);
+    }
 
-	/**
-	 * @test
-	 */
-	public function testDualArguments() {
-		$this->executeDualArgumentTest(8, 2, 6);
-	}
+    /**
+     * @test
+     */
+    public function testDualArguments()
+    {
+        $this->executeDualArgumentTest(8, 2, 6);
+    }
 
+    /**
+     * @test
+     */
+    public function executeMissingArgumentTest()
+    {
+        $this->expectViewHelperException('Required argument "b" was not supplied');
+        $result = $this->executeViewHelper(['a' => 1, 'fail' => true]);
+    }
+
+    /**
+     * @test
+     */
+    public function executeInvalidArgumentTypeTest()
+    {
+        $this->expectViewHelperException('Required argument "a" was not supplied');
+        $result = $this->executeViewHelper(['b' => 1, 'fail' => true]);
+    }
 }

@@ -1,27 +1,24 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Render;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
+use TYPO3\CMS\Extbase\Mvc\Dispatcher;
+use TYPO3\CMS\Extbase\Mvc\ResponseInterface;
+use TYPO3\CMS\Extbase\Mvc\Web\Request;
+use TYPO3\CMS\Extbase\Mvc\Web\Response;
+use TYPO3\CMS\Extbase\Object\ObjectManager;
+use TYPO3\CMS\Extbase\Object\ObjectManagerInterface;
+use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
  * ### Render: Request
@@ -32,111 +29,124 @@
  * Note: arguments must not be wrapped with the prefix used
  * in GET/POST parameters but must be provided as if the
  * arguments were sent directly to the Controller action.
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Render
  */
-class Tx_Vhs_ViewHelpers_Render_RequestViewHelper extends Tx_Vhs_ViewHelpers_Render_AbstractRenderViewHelper {
+class RequestViewHelper extends AbstractRenderViewHelper
+{
+    use CompileWithRenderStatic;
 
-	/**
-	 * @var Tx_Extbase_MVC_Dispatcher
-	 */
-	protected $dispatcher;
+    /**
+     * @var string
+     */
+    protected static $requestType = Request::class;
 
-	/**
-	 * @var string
-	 */
-	protected $requestType = 'Tx_Extbase_MVC_Web_Request';
+    /**
+     * @var string
+     */
+    protected static $responseType = Response::class;
 
-	/**
-	 * @var string
-	 */
-	protected $responseType = 'Tx_Extbase_MVC_Web_Response';
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        parent::initializeArguments();
+        $this->registerArgument('action', 'string', 'Controller action to call in request');
+        $this->registerArgument('controller', 'string', 'Controller name to call in request');
+        $this->registerArgument('extensionName', 'string', 'Extension name scope to use in request');
+        $this->registerArgument('vendorName', 'string', 'Vendor name scope to use in request');
+        $this->registerArgument('pluginName', 'string', 'Plugin name scope to use in request');
+        $this->registerArgument('arguments', 'array', 'Arguments to use in request');
+    }
 
-	/**
-	 * @param Tx_Extbase_MVC_Dispatcher $dispatcher
-	 * @return void
-	 */
-	public function injectDispatcher(Tx_Extbase_MVC_Dispatcher $dispatcher) {
-		$this->dispatcher = $dispatcher;
-	}
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return string|ResponseInterface
+     * @throws \Exception
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        $action = $arguments['action'];
+        $controller = $arguments['controller'];
+        $extensionName = $arguments['extensionName'];
+        $pluginName = $arguments['pluginName'];
+        $vendorName = $arguments['vendorName'];
+        $requestArguments = is_array($arguments['arguments']) ? $arguments['arguments'] : [];
+        $configurationManager = static::getConfigurationManager();
+        $objectManager = static::getObjectManager();
+        $contentObjectBackup = $configurationManager->getContentObject();
+        $request = $renderingContext->getControllerContext()->getRequest();
+        $configurationBackup = $configurationManager->getConfiguration(
+            ConfigurationManagerInterface::CONFIGURATION_TYPE_FRAMEWORK,
+            $request->getControllerExtensionName(),
+            $request->getPluginName()
+        );
 
-	/**
-	 * Dispatch Request
-	 *
-	 * Dispatches (as a completely new Request) a Request that will
-	 * execute a configured Plugin->Controller->action() which means
-	 * that the Plugin, Controller and Action you use must be allowed
-	 * by the plugin configuration of the target controller.
-	 *
-	 * @param string|NULL $action
-	 * @param string|NULL $controller
-	 * @param string|NULL $extensionName
-	 * @param string|NULL $pluginName
-	 * @param string|NULL $vendorName
-	 * @param array $arguments
-	 * @param integer $pageUid
-	 * @return Tx_Extbase_MVC_ResponseInterface
-	 * @throws Exception
-	 * @api
-	 */
-	public function render(
-			$action = NULL,
-			$controller = NULL,
-			$extensionName = NULL,
-			$pluginName = NULL,
-			$vendorName = NULL,
-			array $arguments = array(),
-			$pageUid = 0) {
-		$contentObjectBackup = $this->configurationManager->getContentObject();
-		if ($this->request) {
-			$configurationBackup = $this->configurationManager->getConfiguration(
-				Tx_Extbase_Configuration_ConfigurationManagerInterface::CONFIGURATION_TYPE_FRAMEWORK,
-				$this->request->getControllerExtensionName(),
-				$this->request->getPluginName()
-			);
-		}
-		$temporaryContentObject = new tslib_cObj();
-		/** @var Tx_Extbase_MVC_Web_Request $request */
-		$request = $this->objectManager->get($this->requestType);
-		$request->setControllerActionName($action);
-		$request->setControllerName($controller);
-		$request->setPluginName($pluginName);
-		$request->setControllerExtensionName($extensionName);
-		$request->setArguments($arguments);
-		// TODO: remove for 6.2 LTS
-		if (FALSE === empty($vendorName)) {
-			$request->setControllerVendorName($vendorName);
-		}
-		try {
-			/** @var Tx_Extbase_MVC_ResponseInterface $response */
-			$response = $this->objectManager->get($this->responseType);
-			$this->configurationManager->setContentObject($temporaryContentObject);
-			$this->configurationManager->setConfiguration(
-				$this->configurationManager->getConfiguration(
-					Tx_Extbase_Configuration_ConfigurationManagerInterface::CONFIGURATION_TYPE_FRAMEWORK,
-					$extensionName,
-					$pluginName
-				)
-			);
-			$this->dispatcher->dispatch($request, $response);
-			$this->configurationManager->setContentObject($contentObjectBackup);
-			if (isset($configurationBackup)) {
-				$this->configurationManager->setConfiguration($configurationBackup);
-			}
-			unset($pageUid);
-			return $response;
-		} catch (Exception $error) {
-			if (!$this->arguments['graceful']) {
-				throw $error;
-			}
-			if ($this->arguments['onError']) {
-				return sprintf($this->arguments['onError'], array($error->getMessage()), $error->getCode());
-			}
-			return $error->getMessage() . ' (' . $error->getCode() . ')';
-		}
-		return NULL;
-	}
+        $temporaryContentObject = GeneralUtility::makeInstance(ContentObjectRenderer::class);
+        /** @var Request $request */
+        $request = $objectManager->get(static::$requestType);
+        $request->setControllerActionName($action);
+        $request->setControllerName($controller);
+        $request->setPluginName($pluginName);
+        $request->setControllerExtensionName($extensionName);
+        if (!empty($requestArguments)) {
+            $request->setArguments($requestArguments);
+        }
+        $request->setControllerVendorName($vendorName);
 
+        try {
+            /** @var ResponseInterface $response */
+            $response = $objectManager->get(static::$responseType);
+            $configurationManager->setContentObject($temporaryContentObject);
+            $configurationManager->setConfiguration(
+                $configurationManager->getConfiguration(
+                    ConfigurationManagerInterface::CONFIGURATION_TYPE_FRAMEWORK,
+                    $extensionName,
+                    $pluginName
+                )
+            );
+            static::getDispatcher()->dispatch($request, $response);
+            $configurationManager->setContentObject($contentObjectBackup);
+            if (true === isset($configurationBackup)) {
+                $configurationManager->setConfiguration($configurationBackup);
+            }
+            return $response;
+        } catch (\Exception $error) {
+            if (false === (boolean) $arguments['graceful']) {
+                throw $error;
+            }
+            if (false === empty($arguments['onError'])) {
+                return sprintf($arguments['onError'], [$error->getMessage()], $error->getCode());
+            }
+            return $error->getMessage() . ' (' . $error->getCode() . ')';
+        }
+    }
+
+    /**
+     * @return ObjectManagerInterface
+     */
+    protected static function getObjectManager()
+    {
+        return GeneralUtility::makeInstance(ObjectManager::class);
+    }
+
+    /**
+     * @return Dispatcher
+     */
+    protected static function getDispatcher()
+    {
+        return static::getObjectManager()->get(Dispatcher::class);
+    }
+
+    /**
+     * @return ConfigurationManagerInterface
+     */
+    protected static function getConfigurationManager()
+    {
+        return static::getObjectManager()->get(ConfigurationManagerInterface::class);
+    }
 }

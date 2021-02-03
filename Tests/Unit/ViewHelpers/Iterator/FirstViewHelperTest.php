@@ -1,33 +1,93 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\Iterator;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\AbstractViewHelperTest;
 
 /**
- * @protection on
- * @author Claus Due <claus@wildside.dk>
- * @package Vhs
+ * Class FirstViewHelperTest
  */
-class Tx_Vhs_ViewHelpers_Iterator_FirstViewHelperTest extends Tx_Vhs_ViewHelpers_AbstractViewHelperTest {
+class FirstViewHelperTest extends AbstractViewHelperTest
+{
 
+    /**
+     * @test
+     */
+    public function returnsFirstElement()
+    {
+        $array = ['a', 'b', 'c'];
+        $arguments = [
+            'haystack' => $array
+        ];
+        $output = $this->executeViewHelper($arguments);
+        $this->assertEquals('a', $output);
+    }
+
+    /**
+     * @test
+     */
+    public function supportsIterators()
+    {
+        $array = new \ArrayIterator(['a', 'b', 'c']);
+        $arguments = [
+            'haystack' => $array
+        ];
+        $output = $this->executeViewHelper($arguments);
+        $this->assertEquals('a', $output);
+    }
+
+    /**
+     * @test
+     */
+    public function supportsTagContent()
+    {
+        $array = ['a', 'b', 'c'];
+        $arguments = [
+            'haystack' => null
+        ];
+        $output = $this->executeViewHelperUsingTagContent($array, $arguments);
+        $this->assertEquals('a', $output);
+    }
+
+    /**
+     * @test
+     */
+    public function returnsNullIfHaystackIsNull()
+    {
+        $arguments = [
+            'haystack' => null
+        ];
+        $output = $this->executeViewHelper($arguments);
+        $this->assertEquals(null, $output);
+    }
+
+    /**
+     * @test
+     */
+    public function returnsNullIfHaystackIsEmptyArray()
+    {
+        $arguments = [
+            'haystack' => []
+        ];
+        $output = $this->executeViewHelper($arguments);
+        $this->assertEquals(null, $output);
+    }
+
+    /**
+     * @test
+     */
+    public function throwsExceptionOnUnsupportedHaystacks()
+    {
+        $arguments = [
+            'haystack' => new \DateTime('now')
+        ];
+        $this->expectViewHelperException('Invalid argument supplied to Iterator/FirstViewHelper - expected array, Iterator or NULL but got');
+        $this->executeViewHelper($arguments);
+    }
 }

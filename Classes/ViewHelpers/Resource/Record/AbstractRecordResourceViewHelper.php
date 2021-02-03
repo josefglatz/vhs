@@ -1,187 +1,228 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Resource\Record;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Danilo Bürger <danilo.buerger@hmspl.de>, Heimspiel GmbH
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Traits\TemplateVariableViewHelperTrait;
+use FluidTYPO3\Vhs\Utility\ErrorUtility;
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Database\Query\QueryBuilder;
+use TYPO3\CMS\Core\Database\Query\Restriction\HiddenRestriction;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
- * @author Danilo Bürger <danilo.buerger@hmspl.de>, Heimspiel GmbH
- * @package Vhs
- * @subpackage ViewHelpers\Resource\Record
+ * Base class: Record Resource ViewHelpers
  */
-abstract class Tx_Vhs_ViewHelpers_Resource_Record_AbstractRecordResourceViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper implements Tx_Vhs_ViewHelpers_Resource_Record_RecordResourceViewHelperInterface {
+abstract class AbstractRecordResourceViewHelper extends AbstractViewHelper implements RecordResourceViewHelperInterface
+{
 
-	/**
-	 * @var string
-	 */
-	protected $table;
+    use TemplateVariableViewHelperTrait;
 
-	/**
-	 * @var string
-	 */
-	protected $field;
+    /**
+     * @var string
+     */
+    protected $table;
 
-	/**
-	 * @var string
-	 */
-	protected $idField = 'uid';
+    /**
+     * @var string
+     */
+    protected $field;
 
-	/**
-	 * @var Tx_Extbase_Configuration_ConfigurationManagerInterface
-	 */
-	protected $configurationManager;
+    /**
+     * @var string
+     */
+    protected $idField = 'uid';
 
-	/**
-	 * @param Tx_Extbase_Configuration_ConfigurationManagerInterface $configurationManager
-	 * @return void
-	 */
-	public function injectConfigurationManager(Tx_Extbase_Configuration_ConfigurationManagerInterface $configurationManager) {
-		$this->configurationManager = $configurationManager;
-	}
+    /**
+     * @var \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface
+     */
+    protected $configurationManager;
 
-	/**
-	 * Initialize arguments.
-	 *
-	 * @return void
-	 * @api
-	 */
-	public function initializeArguments() {
-		$this->registerArgument('table', 'string', 'The table to lookup records.', TRUE);
-		$this->registerArgument('field', 'string', 'The field of the table associated to resources.', TRUE);
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
 
-		$this->registerArgument('record', 'array', 'The actual record. Alternatively you can use the "uid" argument.', FALSE, NULL);
-		$this->registerArgument('uid', 'integer', 'The uid of the record. Alternatively you can use the "record" argument.', FALSE, NULL);
+    /**
+     * @param \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface $configurationManager
+     * @return void
+     */
+    public function injectConfigurationManager(ConfigurationManagerInterface $configurationManager)
+    {
+        $this->configurationManager = $configurationManager;
+    }
 
-		$this->registerArgument('as', 'string', 'If specified, a template variable with this name containing the requested data will be inserted instead of returning it.', FALSE, NULL);
-	}
+    /**
+     * Initialize arguments.
+     *
+     * @return void
+     * @api
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('table', 'string', 'The table to lookup records.', true);
+        $this->registerArgument('field', 'string', 'The field of the table associated to resources.', true);
+        $this->registerArgument(
+            'record',
+            'array',
+            'The actual record. Alternatively you can use the "uid" argument.',
+            false,
+            null
+        );
+        $this->registerArgument(
+            'uid',
+            'integer',
+            'The uid of the record. Alternatively you can use the "record" argument.',
+            false,
+            null
+        );
+        $this->registerArgument(
+            'as',
+            'string',
+            'If specified, a template variable with this name containing the requested data will be inserted ' .
+            'instead of returning it.',
+            false,
+            null
+        );
+    }
 
-	/**
-	 * @param mixed $identity
-	 * @return mixed
-	 */
-	public function getResource($identity) {
-		return $identity;
-	}
+    /**
+     * @param mixed $identity
+     * @return mixed
+     */
+    public function getResource($identity)
+    {
+        return $identity;
+    }
 
-	/**
-	 * @param array $record
-	 * @return array
-	 */
-	public function getResources($record) {
-		$field = $this->getField();
+    /**
+     * @param array $record
+     * @return array
+     */
+    public function getResources($record)
+    {
+        $field = $this->getField();
 
-		if (FALSE === isset($record[$field])) {
-			throw new Tx_Fluid_Core_ViewHelper_Exception('The "field" argument was not found on the selected record.', 1384612728);
-		}
+        if (false === isset($record[$field])) {
+            ErrorUtility::throwViewHelperException('The "field" argument was not found on the selected record.', 1384612728);
+        }
 
-		if (TRUE === empty($record[$field])) {
-			return array();
-		}
+        if (true === empty($record[$field])) {
+            return [];
+        }
 
-		return t3lib_div::trimExplode(',', $record[$field]);
-	}
+        return GeneralUtility::trimExplode(',', $record[$field]);
+    }
 
-	/**
-	 * @return string
-	 */
-	public function getTable() {
-		$table = $this->arguments['table'];
-		if (NULL === $table) {
-			$table = $this->table;
-		}
+    /**
+     * @return string
+     */
+    public function getTable()
+    {
+        $table = $this->arguments['table'];
+        if (null === $table) {
+            $table = $this->table;
+        }
 
-		if (TRUE === empty($table) || FALSE === is_string($table)) {
-			throw new Tx_Fluid_Core_ViewHelper_Exception('The "table" argument must be specified and must be a string.', 1384611336);
-		}
+        if (true === empty($table) || false === is_string($table)) {
+            ErrorUtility::throwViewHelperException('The "table" argument must be specified and must be a string.', 1384611336);
+        }
 
-		return $table;
-	}
+        return $table;
+    }
 
-	/**
-	 * @return string
-	 */
-	public function getField() {
-		$field = $this->arguments['field'];
-		if (NULL === $field) {
-			$field = $this->field;
-		}
+    /**
+     * @return string
+     */
+    public function getField()
+    {
+        $field = $this->arguments['field'];
+        if (null === $field) {
+            $field = $this->field;
+        }
 
-		if (TRUE === empty($field) || FALSE === is_string($field)) {
-			throw new Tx_Fluid_Core_ViewHelper_Exception('The "field" argument must be specified and must be a string.', 1384611355);
-		}
+        if (true === empty($field) || false === is_string($field)) {
+            ErrorUtility::throwViewHelperException('The "field" argument must be specified and must be a string.', 1384611355);
+        }
 
-		return $field;
-	}
+        return $field;
+    }
 
-	/**
-	 * @param mixed $id
-	 * @return array
-	 */
-	public function getRecord($id) {
-		$table = $this->getTable();
-		$idField = $this->idField;
+    /**
+     * @param mixed $id
+     * @return array|null
+     */
+    public function getRecord($id)
+    {
+        $table = $this->getTable();
+        $idField = $this->idField;
 
-		$sqlIdField = $GLOBALS['TYPO3_DB']->quoteStr($idField, $table);
-		$sqlId = $GLOBALS['TYPO3_DB']->fullQuoteStr($id, $table);
+        /** @var QueryBuilder $queryBuilder */
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
 
-		return reset($GLOBALS['TYPO3_DB']->exec_SELECTgetRows('*', $table, $sqlIdField . ' = ' . $sqlId));
-	}
+        if ($GLOBALS["TSFE"]->fePreview) {
+            $queryBuilder->getRestrictions()->removeByType(HiddenRestriction::class);
+        }
 
-	/**
-	 * @return array
-	 */
-	public function getActiveRecord() {
-		return $this->configurationManager->getContentObject()->data;
-	}
+        $queryBuilder->createNamedParameter($id, \PDO::PARAM_INT, ':id');
 
-	/**
-	 * @return mixed
-	 */
-	public function render() {
-		$record = $this->arguments['record'];
-		$uid = $this->arguments['uid'];
+        return $queryBuilder
+            ->select('*')
+            ->from($table)
+            ->where(
+                $queryBuilder->expr()->eq($idField, ':id')
+            )
+            ->execute()
+            ->fetch() ?: null;
+    }
 
-		if (NULL === $record) {
-			if (NULL === $uid) {
-				$record = $this->getActiveRecord();
-			} else {
-				$record = $this->getRecord($uid);
-			}
-		}
+    /**
+     * @return array
+     */
+    public function getActiveRecord()
+    {
+        return $this->configurationManager->getContentObject()->data;
+    }
 
-		if (NULL === $record) {
-			throw new Tx_Fluid_Core_ViewHelper_Exception('No record was found. The "record" or "uid" argument must be specified.', 1384611413);
-		}
+    /**
+     * @return mixed
+     */
+    public function render()
+    {
+        $record = $this->arguments['record'];
+        $uid = $this->arguments['uid'];
 
-		$resources = $this->getResources($record);
+        if (null === $record) {
+            if (null === $uid) {
+                $record = $this->getActiveRecord();
+            } else {
+                $record = $this->getRecord($uid);
+            }
+        }
 
-		$as = $this->arguments['as'];
-		if (TRUE === empty($as)) {
-			return $resources;
-		}
+        if (null === $record) {
+            ErrorUtility::throwViewHelperException('No record was found. The "record" or "uid" argument must be specified.', 1384611413);
+        }
 
-		$variables = array($as => $resources);
-		$output = Tx_Vhs_Utility_ViewHelperUtility::renderChildrenWithVariables($this, $this->templateVariableContainer, $variables);
-		return $output;
-	}
-
+        // attempt to load resources. If any Exceptions happen, transform them to
+        // ViewHelperExceptions which render as an inline text error message.
+        try {
+            $resources = $this->getResources($record);
+        } catch (\Exception $error) {
+            // we are doing the pokemon-thing and catching the very top level
+            // of Exception because the range of Exceptions that are possibly
+            // thrown by the getResources() method in subclasses are not
+            // extended from a shared base class like RuntimeException. Thus,
+            // we are forced to "catch them all" - but we also output them.
+            ErrorUtility::throwViewHelperException($error->getMessage(), $error->getCode());
+        }
+        return $this->renderChildrenWithVariableOrReturnInput($resources);
+    }
 }

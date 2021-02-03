@@ -1,65 +1,58 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Page\Header;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Georg Ringer <typo3@ringerge.org>
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Traits\PageRendererTrait;
+use FluidTYPO3\Vhs\Traits\TagViewHelperTrait;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
 
 /**
- * ViewHelper used to render a meta tag
- *
- * @author Georg Ringer
- * @package Vhs
- * @subpackage ViewHelpers\Page\Header
+ * ViewHelper used to render a link tag in the `<head>` section of the page.
+ * If you use the ViewHelper in a plugin, the plugin and its action have to
+ * be cached!
  */
-class Tx_Vhs_ViewHelpers_Page_Header_LinkViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractTagBasedViewHelper {
+class LinkViewHelper extends AbstractTagBasedViewHelper
+{
 
-	/**
-	 * @var	string
-	 */
-	protected $tagName = 'link';
+    use TagViewHelperTrait;
+    use PageRendererTrait;
 
-	/**
-	 * Arguments initialization
-	 *
-	 * @return void
-	 */
-	public function initializeArguments() {
-		$this->registerTagAttribute('rel', 'string', 'Property: rel');
-		$this->registerTagAttribute('href', 'string', 'Property: href');
-		$this->registerTagAttribute('type', 'string', 'Property: type');
-		$this->registerTagAttribute('lang', 'string', 'Property: lang');
-		$this->registerTagAttribute('dir', 'string', 'Property: dir');
-	}
+    /**
+     * @var    string
+     */
+    protected $tagName = 'link';
 
-	/**
-	 * Render method
-	 *
-	 * @return void
-	*/
-	public function render() {
-		if (TYPO3_MODE == 'BE') {
-			return;
-		}
-		$GLOBALS['TSFE']->getPageRenderer()->addMetaTag($this->tag->render());
-	}
+    /**
+     * Arguments initialization
+     *
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        parent::initializeArguments();
+        $this->registerTagAttribute('rel', 'string', 'Property: rel');
+        $this->registerTagAttribute('href', 'string', 'Property: href');
+        $this->registerTagAttribute('type', 'string', 'Property: type');
+        $this->registerTagAttribute('lang', 'string', 'Property: lang');
+        $this->registerTagAttribute('dir', 'string', 'Property: dir');
+    }
 
+    /**
+     * Render method
+     *
+     * @return void
+     */
+    public function render()
+    {
+        if ('BE' === TYPO3_MODE) {
+            return;
+        }
+        static::getPageRenderer()->addHeaderData($this->renderTag($this->tagName));
+    }
 }

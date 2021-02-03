@@ -1,101 +1,90 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Page;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Traits\TemplateVariableViewHelperTrait;
+use FluidTYPO3\Vhs\Utility\ErrorUtility;
+use TYPO3\CMS\Frontend\Page\PageRepository;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
- * ViewHelper to access data of the current page record
+ * ViewHelper to access data of the current page record.
  *
- * @author Björn Fromme <fromeme@dreipunktnull.com>, dreipunktnull
- * @author Danilo Bürger <danilo.buerger@hmspl.de>, Heimspiel GmbH
- * @package Vhs
- * @subpackage ViewHelpers\Page
+ * Does not work in the TYPO3 backend.
  */
-class Tx_Vhs_ViewHelpers_Page_InfoViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class InfoViewHelper extends AbstractViewHelper
+{
+    use CompileWithRenderStatic;
+    use TemplateVariableViewHelperTrait;
 
-	/**
-	 * @var Tx_Vhs_Service_PageSelectService
-	 */
-	protected $pageSelect;
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
 
-	/**
-	 * @param Tx_Vhs_Service_PageSelectService $pageSelect
-	 * @return void
-	 */
-	public function injectPageSelectService(Tx_Vhs_Service_PageSelectService $pageSelect) {
-		$this->pageSelect = $pageSelect;
-	}
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerAsArgument();
+        $this->registerArgument(
+            'pageUid',
+            'integer',
+            'If specified, this UID will be used to fetch page data instead of using the current page.',
+            false,
+            0
+        );
+        $this->registerArgument(
+            'field',
+            'string',
+            'If specified, only this field will be returned/assigned instead of the complete page record.'
+        );
+    }
 
-	/**
-	 * @return void
-	 */
-	public function initializeArguments() {
-		$this->registerArgument('pageUid', 'integer', 'If specified, this UID will be used to fetch page data instead of using the current page.', FALSE, 0);
-		$this->registerArgument('as', 'string', 'If specified, a template variable with this name containing the requested data will be inserted instead of returning it.', FALSE, NULL);
-		$this->registerArgument('field', 'string', 'If specified, only this field will be returned/assigned instead of the complete page record.', FALSE, NULL);
-	}
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return mixed
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        if (!isset($GLOBALS['TSFE']) || !$GLOBALS['TSFE']->sys_page instanceof PageRepository) {
+            ErrorUtility::throwViewHelperException(
+                sprintf('ViewHelper %s does not work in backend context without a simulated frontend.', static::class),
+                1489931508
+            );
+        }
+        $pageUid = (integer) $arguments['pageUid'];
+        if (0 === $pageUid) {
+            $pageUid = $GLOBALS['TSFE']->id;
+        }
+        $page = $GLOBALS['TSFE']->sys_page->getPage_noCheck($pageUid);
+        $field = $arguments['field'];
+        $content = null;
+        if (true === empty($field)) {
+            $content = $page;
+        } elseif (true === is_array($page) && true === isset($page[$field])) {
+            $content = $page[$field];
+        }
 
-	/**
-	 * @return mixed
-	 */
-	public function render() {
-		// Get page via pageUid argument or current id
-		$pageUid = intval($this->arguments['pageUid']);
-		if (0 === $pageUid) {
-			 $pageUid = $GLOBALS['TSFE']->id;
-		}
-
-		$page = $this->pageSelect->getPage($pageUid);
-
-		// Add the page overlay
-		$languageUid = intval($GLOBALS['TSFE']->sys_language_uid);
-		if (0 !== $languageUid) {
-			$pageOverlay = $this->pageSelect->getPageOverlay($pageUid, $languageUid);
-			if (TRUE === is_array($pageOverlay)) {
-				$page = t3lib_div::array_merge_recursive_overrule($page, $pageOverlay, FALSE, FALSE);
-			}
-		}
-
-		$content = NULL;
-
-		// Check if field should be returned or assigned
-		$field = $this->arguments['field'];
-		if (TRUE === empty($field)) {
-			$content = $page;
-		} elseif (TRUE === isset($page[$field])) {
-			$content = $page[$field];
-		}
-
-		// Return if no assign
-		$as = $this->arguments['as'];
-		if (TRUE === empty($as)) {
-			return $content;
-		}
-
-		$variables = array($as => $content);
-		$output = Tx_Vhs_Utility_ViewHelperUtility::renderChildrenWithVariables($this, $this->templateVariableContainer, $variables);
-
-		return $output;
-	}
-
+        return static::renderChildrenWithVariableOrReturnInputStatic(
+            $content,
+            $arguments['as'],
+            $renderingContext,
+            $renderChildrenClosure
+        );
+    }
 }

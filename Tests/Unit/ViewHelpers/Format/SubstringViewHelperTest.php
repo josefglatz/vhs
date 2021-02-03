@@ -1,71 +1,46 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\Format;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\AbstractViewHelperTest;
 
 /**
- * @protection on
- * @author Claus Due <claus@wildside.dk>
- * @package Vhs
+ * Class SubstringViewHelperTest
  */
-class Tx_Vhs_ViewHelpers_Format_SubstringViewHelperTest extends Tx_Vhs_ViewHelpers_AbstractViewHelperTest {
+class SubstringViewHelperTest extends AbstractViewHelperTest
+{
 
-	/**
-	 * @test
-	 */
-	public function canRenderUsingArguments() {
-		$arguments = array(
-			'content' => 'foobar',
-			'length' => NULL,
-			'start' => 3
-		);
-		$test = $this->executeViewHelper($arguments);
-		$this->assertSame('bar', $test);
-	}
+    /**
+     * @test
+     */
+    public function canRenderUsingArguments()
+    {
+        $arguments = [
+            'content' => 'foobar',
+            'length' => null,
+            'start' => 3
+        ];
+        $test = $this->executeViewHelper($arguments);
+        $this->assertSame('bar', $test);
+    }
 
-	/**
-	 * @test
-	 */
-	public function canRenderWithLengthArgument() {
-		$arguments = array(
-			'content' => 'foobar',
-			'length' => 3,
-			'start' => 2
-		);
-		$test = $this->executeViewHelper($arguments);
-		$this->assertSame('oba', $test);
-	}
-
-	/**
-	 * @test
-	 */
-	public function canRenderUsingTagContent() {
-		$arguments = array(
-			'length' => NULL,
-			'start' => 3
-		);
-		$test = $this->executeViewHelperUsingTagContent('Text', 'foobar', $arguments);
-		$this->assertSame('bar', $test);
-	}
-
+    /**
+     * @test
+     */
+    public function canRenderWithLengthArgument()
+    {
+        $arguments = [
+            'content' => 'foobar',
+            'length' => 3,
+            'start' => 2
+        ];
+        $test = $this->executeViewHelper($arguments);
+        $this->assertSame('oba', $test);
+    }
 }

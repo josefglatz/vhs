@@ -1,8 +1,10 @@
 <?php
+namespace FluidTYPO3\Vhs\ViewHelpers\Iterator;
+
 /***************************************************************
  *  Copyright notice
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>, Wildside A/S
+ *  (c) 2014 Claus Due <claus@namelesscoder.net>
  *
  *  All rights reserved
  *
@@ -23,38 +25,58 @@
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
+use FluidTYPO3\Vhs\Traits\ArrayConsumingViewHelperTrait;
+use FluidTYPO3\Vhs\Traits\TemplateVariableViewHelperTrait;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+
 /**
- * Gets values from an iterator, removing current keys (if any exist)
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Iterator
+ * Gets values from an iterator, removing current keys (if any exist).
  */
-class Tx_Vhs_ViewHelpers_Iterator_ValuesViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class ValuesViewHelper extends AbstractViewHelper
+{
+    use TemplateVariableViewHelperTrait;
+    use ArrayConsumingViewHelperTrait;
 
-	/**
-	 * Render method
-	 *
-	 * @param mixed $subject
-	 * @throws Exception
-	 * @return array
-	 */
-	public function render($subject = NULL) {
-		$as = $this->arguments['as'];
-		if ($subject === NULL) {
-			$subject = $this->renderChildren();
-		}
-		if ($subject instanceof Iterator) {
-			$subject = iterator_to_array($subject, TRUE);
-		} elseif (is_array($subject) !== TRUE) {
-			throw new Exception('Cannot get values of unsupported type: ' . gettype($subject), 1357098192);
-		}
-		$output = array_values($subject);
-		if (NULL !== $as) {
-			$variables = array($as => $output);
-			$output = Tx_Vhs_Utility_ViewHelperUtility::renderChildrenWithVariables($this, $this->templateVariableContainer, $variables);
-		}
-		return $output;
-	}
+    /**
+     * @var boolean
+     */
+    protected $escapeChildren = false;
 
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
+
+    /**
+     * Initialize arguments
+     *
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('subject', 'mixed', 'The array/Traversable instance from which to get values');
+        $this->registerAsArgument();
+    }
+
+    /**
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return mixed
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        $subject = static::arrayFromArrayOrTraversableOrCSVStatic(empty($arguments['as']) ? ($arguments['subject'] ?? $renderChildrenClosure()) : $arguments['subject']);
+        $output = array_values($subject);
+        return static::renderChildrenWithVariableOrReturnInputStatic(
+            $output,
+            $arguments['as'],
+            $renderingContext,
+            $renderChildrenClosure
+        );
+    }
 }

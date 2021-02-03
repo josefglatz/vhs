@@ -1,27 +1,12 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Once;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
 
 /**
  * Once: Cookie
@@ -37,39 +22,51 @@
  * In addition the ViewHelper is a ConditionViewHelper, which
  * means you can utilize the f:then and f:else child nodes as
  * well as the "then" and "else" arguments.
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Once
  */
-class Tx_Vhs_ViewHelpers_Once_CookieViewHelper extends Tx_Vhs_ViewHelpers_Once_AbstractOnceViewHelper {
-	/**
-	 * @return void
-	 */
-	protected function storeIdentifier() {
-		$identifier = $this->getIdentifier();
-		$domain = isset($this->arguments['lockToDomain']) && $this->arguments['lockToDomain'] ? $_SERVER['HTTP_HOST'] : NULL;
-		setcookie($identifier, '1', time() + $this->arguments['ttl'], NULL, $domain);
-	}
+class CookieViewHelper extends AbstractOnceViewHelper
+{
+    /**
+     * @param array $arguments
+     * @return void
+     */
+    protected static function storeIdentifier(array $arguments)
+    {
+        $identifier = static::getIdentifier($arguments);
+        $domain = $arguments['lockToDomain'] ? $_SERVER['HTTP_HOST'] : null;
+        setcookie($identifier, '1', time() + $arguments['ttl'], null, $domain);
+    }
 
-	/**
-	 * @return boolean
-	 */
-	protected function assertShouldSkip() {
-		$identifier = $this->getIdentifier();
-		return (isset($_COOKIE[$identifier]) === TRUE);
-	}
+    /**
+     * @param array $arguments
+     * @return boolean
+     */
+    protected static function assertShouldSkip(array $arguments)
+    {
+        $identifier = static::getIdentifier($arguments);
+        return (true === isset($_COOKIE[$identifier]));
+    }
 
-	/**
-	 * @return void
-	 */
-	protected function removeIfExpired() {
-		$identifier = $this->getIdentifier();
-		$existsInCookie = (isset($_COOKIE[$identifier]) === TRUE);
-		if ($existsInCookie === TRUE) {
-			unset($_SESSION[$identifier]);
-			setcookie($identifier, NULL, time() - 1);
-		}
-	}
+    /**
+     * @param array $arguments
+     * @return void
+     */
+    protected static function removeIfExpired(array $arguments)
+    {
+        $identifier = static::getIdentifier($arguments);
+        $existsInCookie = (boolean) (true === isset($_COOKIE[$identifier]));
+        if (true === $existsInCookie) {
+            static::removeCookie($arguments);
+        }
+    }
 
+    /**
+     * @param array $arguments
+     * @return void
+     */
+    protected static function removeCookie(array $arguments)
+    {
+        $identifier = static::getIdentifier($arguments);
+        unset($_SESSION[$identifier], $_COOKIE[$identifier]);
+        setcookie($identifier, null, time() - 1);
+    }
 }
