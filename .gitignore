@@ -1,0 +1,13 @@
+vendor
+.idea
+.phpunit.result.cache
+composer.lock
+preflight
+/build
+/Documentation-GENERATED-temp/
+/index.php
+/typo3
+/typo3_src
+/public
+
+var/

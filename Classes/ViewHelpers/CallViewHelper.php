@@ -1,27 +1,15 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
 
 /**
  * ### Call ViewHelper
@@ -30,38 +18,63 @@
  *
  * ### Examples
  *
- *     <!-- inline, useful as argument, for example in f:for -->
- *     {object -> v:call(method: 'toArray')}
- *     <!-- tag, useful to quickly output simple values -->
- *     <v:call object="{object}" method="unconventionalGetter" />
- *     <v:call method="unconventionalGetter">{object}</v:call>
- *     <!-- arguments for the method -->
- *     <v:call object="{object}" method="doSomethingWithArguments" arguments="{0: 'foo', 1: 'bar'}" />
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers
+ * ```
+ * <!-- inline, useful as argument, for example in f:for -->
+ * {object -> v:call(method: 'toArray')}
+ * <!-- tag, useful to quickly output simple values -->
+ * <v:call object="{object}" method="unconventionalGetter" />
+ * <v:call method="unconventionalGetter">{object}</v:call>
+ * <!-- arguments for the method -->
+ * <v:call object="{object}" method="doSomethingWithArguments" arguments="{0: 'foo', 1: 'bar'}" />
+ * ```
  */
-class Tx_Vhs_ViewHelpers_CallViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class CallViewHelper extends AbstractViewHelper
+{
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
 
-	/**
-	 * @param string $method
-	 * @param object $object
-	 * @param array $arguments
-	 * @throws Exception
-	 * @return mixed
-	 */
-	public function render($method, $object = NULL, array $arguments = array()) {
-		if ($object === NULL) {
-			$object = $this->renderChildren();
-			if (is_object($object) === FALSE) {
-				throw new RuntimeException('Using v:call requires an object either as "object" attribute, tag content or inline argument', 1356849652);
-			}
-		}
-		if (!method_exists($object, $method)) {
-			throw new RuntimeException('Method "' . $method . '" does not exist on object of type ' . get_class($object), 1356834755);
-		}
-		return call_user_func_array(array($object, $method), $arguments);
-	}
+    /**
+     * @var boolean
+     */
+    protected $escapeChildren = false;
 
+    public function initializeArguments(): void
+    {
+        $this->registerArgument('object', 'object', 'Instance to call method on');
+        $this->registerArgument('method', 'string', 'Name of method to call on instance', true);
+        $this->registerArgument('arguments', 'array', 'Array of arguments if method requires arguments', false, []);
+    }
+
+    /**
+     * @return mixed
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        /** @var object $object */
+        $object = $arguments['object'] ?? $renderChildrenClosure();
+        /** @var string $method */
+        $method = $arguments['method'];
+        /** @var array $methodArguments */
+        $methodArguments = $arguments['arguments'];
+        if (!is_object($object)) {
+            throw new \RuntimeException(
+                'Using v:call requires an object either as "object" attribute, tag content or inline argument',
+                1356849652
+            );
+        }
+        if (!method_exists($object, $method)) {
+            throw new \RuntimeException(
+                'Method "' . $method . '" does not exist on object of type ' . get_class($object),
+                1356834755
+            );
+        }
+        /** @var callable $callable */
+        $callable = [$object, $method];
+        return call_user_func_array($callable, $methodArguments);
+    }
 }

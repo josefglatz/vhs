@@ -1,60 +1,65 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Content\Resources;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Danilo Bürger <danilo.buerger@hmspl.de>, Heimspiel GmbH
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Traits\ArgumentOverride;
 
 /**
- * @author Danilo Bürger <danilo.buerger@hmspl.de>, Heimspiel GmbH
- * @package Vhs
- * @subpackage ViewHelpers\Content\Resources
+ * Content FAL relations ViewHelper
+ *
+ * ### Render a single image in a content element
+ *
+ * We assume that the flux content element has an IRRE file field
+ * `<flux:field.inline.fal name="settings.image">`.
+ *
+ * The file data can be loaded and displayed with:
+ *
+ * ```
+ * {v:content.resources.fal(field: 'settings.image', record: record)
+ *   -> v:iterator.first()
+ *   -> v:variable.set(name: 'image')}
+ * <f:if condition="{image}">
+ *   <f:image src="{image.uid}"/>
+ * </f:if>
+ * ```
+ *
+ *
+ * ### Image preview in backend
+ *
+ * To load image data for the "Preview" section in the backend's page view,
+ * you have to pass the `record` attribute:
+ *
+ * ```
+ * {v:content.resources.fal(field: 'settings.image', record: record)}
+ * ```
  */
-class Tx_Vhs_ViewHelpers_Content_Resources_FalViewHelper extends Tx_Vhs_ViewHelpers_Resource_Record_FalViewHelper {
+class FalViewHelper extends \FluidTYPO3\Vhs\ViewHelpers\Resource\Record\FalViewHelper
+{
+    use ArgumentOverride;
 
-	const defaultTable = 'tt_content';
-	const defaultField = 'image';
+    public const string DEFAULT_TABLE = 'tt_content';
+    public const string DEFAULT_FIELD = 'image';
 
-	/**
-	 * @var string
-	 */
-	protected $table = self::defaultTable;
+    protected string $table = self::DEFAULT_TABLE;
+    protected string $field = self::DEFAULT_FIELD;
 
-	/**
-	 * @var string
-	 */
-	protected $field = self::defaultField;
+    public function initializeArguments(): void
+    {
+        parent::initializeArguments();
 
-	/**
-	 * Initialize arguments.
-	 *
-	 * @return void
-	 * @api
-	 */
-	public function initializeArguments() {
-		parent::initializeArguments();
-
-		$this->overrideArgument('table', 'string', 'The table to lookup records.', FALSE, self::defaultTable);
-		$this->overrideArgument('field', 'string', 'The field of the table associated to resources.', FALSE, self::defaultField);
-	}
-
-
+        $this->overrideArgument('table', 'string', 'The table to lookup records.', false, static::DEFAULT_TABLE);
+        $this->overrideArgument(
+            'field',
+            'string',
+            'The field of the table associated to resources.',
+            false,
+            static::DEFAULT_FIELD
+        );
+    }
 }

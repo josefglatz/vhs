@@ -1,49 +1,74 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Format;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
 
 /**
  * Replaces $substring in $content with $replacement.
  *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Format
+ * Supports array as input substring/replacements and content.
+ *
+ * When input substring/replacement is an array, both must be
+ * the same length and must contain only strings.
+ *
+ * When input content is an array, the search/replace is done
+ * on every value in the input content array and the return
+ * value will be an array of equal size as the input content
+ * array but with all values search/replaced. All values in the
+ * input content array must be strings.
  */
-class Tx_Vhs_ViewHelpers_Format_ReplaceViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class ReplaceViewHelper extends AbstractViewHelper
+{
+    public function initializeArguments(): void
+    {
+        $this->registerArgument('content', 'string', 'Content in which to perform replacement. Array supported.');
+        $this->registerArgument('substring', 'string', 'Substring to replace. Array supported.', true);
+        $this->registerArgument('replacement', 'string', 'Replacement to insert. Array supported.', false, '');
+        $this->registerArgument(
+            'returnCount',
+            'bool',
+            'If TRUE, returns the number of replacements that were performed instead of returning output string. ' .
+            'See also `v:count.substring`.'
+        );
+        $this->registerArgument('caseSensitive', 'boolean', 'If true, perform case-sensitive replacement', false, true);
+    }
 
-	/**
-	 * @param string $substring
-	 * @param string $content
-	 * @param string $replacement
-	 * @param integer $count
-	 * @return string
-	 */
-	public function render($substring, $content = NULL, $replacement = '', $count = NULL) {
-		if ($content === NULL) {
-			$content = $this->renderChildren();
-		}
-		return str_replace($substring, $replacement, $content, $count);
-	}
+    /**
+     * @return array|string|int
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        /** @var string $content */
+        $content = $arguments['content'] ?? $renderChildrenClosure();
+        /** @var string|array $content */
+        $content = is_scalar($content) || $content === null ? (string) $content : (array) $content;
 
+        $substring = $arguments['substring'];
+        /** @var string|array $substring */
+        $substring = is_scalar($substring) ? (string) $substring : (array) $substring;
+
+        $replacement = $arguments['replacement'];
+        /** @var string|array $replacement */
+        $replacement = is_scalar($replacement) ? (string) $replacement : (array) $replacement;
+
+        $count = 0;
+        $caseSensitive = (bool) $arguments['caseSensitive'];
+        $function = $caseSensitive ? 'str_replace' : 'str_ireplace';
+        $replaced = $function($substring, $replacement, $content, $count);
+        if ($arguments['returnCount'] ?? false) {
+            return $count;
+        }
+        return $replaced;
+    }
 }

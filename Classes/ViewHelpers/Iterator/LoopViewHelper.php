@@ -1,92 +1,80 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Iterator;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
 
 /**
- * Repeats rendering of children $count times while updating $iteration
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @author Danilo Bürger <danilo.buerger@hmspl.de>, Heimspiel GmbH
- * @package Vhs
- * @subpackage ViewHelpers\Iterator
+ * Repeats rendering of children $count times while updating $iteration.
  */
-class Tx_Vhs_ViewHelpers_Iterator_LoopViewHelper extends Tx_Vhs_ViewHelpers_Iterator_AbstractLoopViewHelper {
+class LoopViewHelper extends AbstractLoopViewHelper
+{
+    public function initializeArguments(): void
+    {
+        parent::initializeArguments();
 
-	/**
-	 * Initialize
-	 *
-	 * @return void
-	 */
-	public function initializeArguments() {
-		parent::initializeArguments();
+        $this->registerArgument('count', 'integer', 'Number of times to render child content', true);
+        $this->registerArgument('minimum', 'integer', 'Minimum number of loops before stopping', false, 0);
+        $this->registerArgument('maximum', 'integer', 'Maxiumum number of loops before stopping', false, PHP_INT_MAX);
+    }
 
-		$this->registerArgument('count', 'integer', 'Number of times to render child content', TRUE);
-		$this->registerArgument('minimum', 'integer', 'Minimum number of loops before stopping', FALSE, 0);
-		$this->registerArgument('maximum', 'integer', 'Maxiumum number of loops before stopping', FALSE, PHP_INT_MAX);
-	}
+    /**
+     * @return string
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        /** @var int $count */
+        $count = $arguments['count'];
+        /** @var int $minimum */
+        $minimum = $arguments['minimum'];
+        /** @var int $maximum */
+        $maximum = $arguments['maximum'];
+        /** @var string|null $iteration */
+        $iteration = $arguments['iteration'];
+        $content = '';
+        $variableProvider = $renderingContext->getVariableProvider();
 
-	/**
-	 * @return string
-	 */
-	public function render() {
-		$count = intval($this->arguments['count']);
-		$minimum = intval($this->arguments['minimum']);
-		$maximum = intval($this->arguments['maximum']);
-		$iteration = $this->arguments['iteration'];
-		$content = '';
+        if ($count < $minimum) {
+            $count = $minimum;
+        } elseif ($count > $maximum) {
+            $count = $maximum;
+        }
 
-		if ($count < $minimum) {
-			$count = $minimum;
-		} elseif ($count > $maximum) {
-			$count = $maximum;
-		}
+        if ($iteration !== null && $variableProvider->exists($iteration)) {
+            $backupVariable = $variableProvider->get($iteration);
+            $variableProvider->remove($iteration);
+        }
 
-		if (TRUE === $this->templateVariableContainer->exists($iteration)) {
-			$backupVariable = $this->templateVariableContainer->get($iteration);
-			$this->templateVariableContainer->remove($iteration);
-		}
+        for ($i = 0; $i < $count; $i++) {
+            $content .= static::renderIteration(
+                $i,
+                0,
+                $count,
+                1,
+                $iteration,
+                $renderingContext,
+                $renderChildrenClosure
+            );
+        }
 
-		for ($i = 0; $i < $count; $i++) {
-			$content .= $this->renderIteration($i, 0, $count, 1, $iteration);
-		}
+        if ($iteration !== null && isset($backupVariable)) {
+            $variableProvider->add($iteration, $backupVariable);
+        }
 
-		if (TRUE === isset($backupVariable)) {
-			$this->templateVariableContainer->add($iteration, $backupVariable);
-		}
+        return $content;
+    }
 
-		return $content;
-	}
-
-	/**
-	 * @param integer $i
-	 * @param integer $from
-	 * @param integer $to
-	 * @param integer $step
-	 * @return boolean
-	 */
-	protected function isLast($i, $from, $to, $step) {
-		return ($i + $step >= $to);
-	}
-
+    protected static function isLast(int $i, int $from, int $to, int $step): bool
+    {
+        return ($i + $step >= $to);
+    }
 }

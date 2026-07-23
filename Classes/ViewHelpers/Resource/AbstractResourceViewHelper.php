@@ -1,152 +1,212 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Resource;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Danilo Bürger <danilo.buerger@hmspl.de>, Heimspiel GmbH
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Proxy\DoctrineQueryProxy;
+use FluidTYPO3\Vhs\Proxy\ResourceFactoryProxy;
+use FluidTYPO3\Vhs\Traits\TagViewHelperCompatibility;
+use FluidTYPO3\Vhs\Utility\ResourceUtility;
+use TYPO3\CMS\Core\Database\Connection;
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Resource\File;
+use TYPO3\CMS\Core\Resource\ProcessedFile;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
 
 /**
- * Base class for resource related view helpers
- *
- * @author Danilo Bürger <danilo.buerger@hmspl.de>, Heimspiel GmbH
- * @package Vhs
- * @subpackage ViewHelpers\Resource
+ * Base class for resource related view helpers.
  */
-abstract class Tx_Vhs_ViewHelpers_Resource_AbstractResourceViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractTagBasedViewHelper {
+abstract class AbstractResourceViewHelper extends AbstractTagBasedViewHelper
+{
+    use TagViewHelperCompatibility;
 
-	/**
-	 * Initialize arguments.
-	 *
-	 * @return void
-	 * @api
-	 */
-	public function initializeArguments() {
-		$this->registerArgument('identifier', 'mixed', 'The FAL combined identifiers (either CSV, array or implementing Traversable).', FALSE, NULL);
-		$this->registerArgument('categories', 'mixed', 'The sys_category records to select the resources from (either CSV, array or implementing Traversable).', FALSE, NULL);
-		$this->registerArgument('treatIdAsUid', 'boolean', 'If TRUE, the identifier argument is treated as resource uids.', FALSE, FALSE);
-		$this->registerArgument('treatIdAsReference', 'boolean', 'If TRUE, the identifier argument is treated as reference uids and will be resolved to resources via sys_file_reference.', FALSE, FALSE);
-	}
+    public function initializeArguments(): void
+    {
+        parent::initializeArguments();
+        $this->registerArgument(
+            'identifier',
+            'mixed',
+            'The FAL combined identifiers (either CSV, array or implementing Traversable).'
+        );
+        $this->registerArgument(
+            'categories',
+            'mixed',
+            'The sys_category records to select the resources from (either CSV, array or implementing Traversable).'
+        );
+        $this->registerArgument(
+            'treatIdAsUid',
+            'boolean',
+            'If TRUE, the identifier argument is treated as resource uids.',
+            false,
+            false
+        );
+        $this->registerArgument(
+            'treatIdAsReference',
+            'boolean',
+            'If TRUE, the identifier argument is treated as reference uids and will be resolved to resources ' .
+            'via sys_file_reference.',
+            false,
+            false
+        );
+    }
 
-	/**
-	 * Returns the files
-	 *
-	 * @param boolean $onlyProperties
-	 * @param mixed $identifier
-	 * @return array|NULL
-	 */
-	public function getFiles($onlyProperties = FALSE, $identifier = NULL, $categories = NULL) {
-		$identifier = $this->arrayForMixedArgument($identifier, 'identifier');
-		$categories = $this->arrayForMixedArgument($categories, 'categories');
-		$treatIdAsUid = (boolean) $this->arguments['treatIdAsUid'];
-		$treatIdAsReference = (boolean) $this->arguments['treatIdAsReference'];
+    /**
+     * @param mixed $categories
+     */
+    public function getFiles(bool $onlyProperties = false, ?string $identifier = null, $categories = null): ?array
+    {
+        $identifier = $this->arrayForMixedArgument($identifier, 'identifier');
+        $categories = $this->arrayForMixedArgument($categories, 'categories');
+        $treatIdAsUid = (bool) $this->arguments['treatIdAsUid'];
+        $treatIdAsReference = (bool) $this->arguments['treatIdAsReference'];
 
-		if (TRUE === $treatIdAsUid && TRUE === $treatIdAsReference) {
-			throw new RuntimeException('The arguments "treatIdAsUid" and "treatIdAsReference" may not both be TRUE.', 1384604695);
-		}
+        if ($treatIdAsUid && $treatIdAsReference) {
+            throw new \RuntimeException(
+                'The arguments "treatIdAsUid" and "treatIdAsReference" may not both be TRUE.',
+                1384604695
+            );
+        }
 
-		if (TRUE === empty($identifier) && TRUE === empty($categories)) {
-			 return NULL;
-		}
+        if (empty($identifier) && empty($categories)) {
+             return null;
+        }
 
-		$files = array();
-		$resourceFactory = t3lib_div::makeInstance('TYPO3\\CMS\\Core\\Resource\\ResourceFactory');
+        foreach ($identifier as $key => $maybeUrl) {
+            if (substr($maybeUrl, 0, 5) !== 't3://') {
+                continue;
+            }
+            $parts = parse_url($maybeUrl);
+            if (!isset($parts['host']) || $parts['host'] !== 'file' || !isset($parts['query'])) {
+                continue;
+            }
+            parse_str($parts['query'], $queryParts);
+            if (isset($queryParts['uid'])) {
+                $identifier[$key] = $queryParts['uid'];
+                $treatIdAsUid = true;
+            }
+        }
 
-		if (FALSE === empty($categories)) {
-			$sqlCategories = implode(',', $GLOBALS['TYPO3_DB']->fullQuoteArray($categories, 'sys_category_record_mm'));
-			$res = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_foreign', 'sys_category_record_mm', 'tablenames = \'sys_file\' AND uid_local IN (' . $sqlCategories . ')');
+        $files = [];
+        /** @var ResourceFactoryProxy $resourceFactory */
+        $resourceFactory = GeneralUtility::makeInstance(ResourceFactoryProxy::class);
 
-			$fileUids = array();
-			while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res)) {
-				$fileUids[] = intval($row['uid_foreign']);
-			}
-			$fileUids = array_unique($fileUids);
+        if (!empty($categories)) {
+            /** @var ConnectionPool $connectionPool */
+            $connectionPool = GeneralUtility::makeInstance(ConnectionPool::class);
+            $queryBuilder = $connectionPool->getQueryBuilderForTable($this->getTablenameForSystemConfiguration());
+            $queryBuilder->createNamedParameter(
+                $this->getTablenameForSystemConfiguration(),
+                Connection::PARAM_STR,
+                ':tablenames'
+            );
+            $queryBuilder->createNamedParameter($categories, Connection::PARAM_STR_ARRAY, ':categories');
 
-			if (TRUE === empty($identifier)) {
-				foreach ($fileUids as $fileUid) {
-					try {
-						$file = $resourceFactory->getFileObject($fileUid);
+            $queryBuilder
+                ->select('uid_foreign')
+                ->from('sys_category_record_mm')
+                ->where(
+                    $queryBuilder->expr()->eq('tablenames', ':tablenames')
+                )
+                ->andWhere(
+                    $queryBuilder->expr()->in('uid_local', ':categories')
+                );
+            $statement = DoctrineQueryProxy::executeQueryOnQueryBuilder($queryBuilder);
+            $rows = DoctrineQueryProxy::fetchAllAssociative($statement);
 
-						if (TRUE === $onlyProperties) {
-							$file = $file->getProperties();
-						}
+            /** @var int[] $fileUids */
+            $fileUids = array_unique(array_column($rows, 'uid_foreign'));
 
-						$files[] = $file;
-					} catch (Exception $e) {
-						continue;
-					}
-				}
+            if (empty($identifier)) {
+                foreach ($fileUids as $fileUid) {
+                    try {
+                        $file = $resourceFactory->getFileObject($fileUid);
 
-				return $files;
-			}
-		}
+                        if ($onlyProperties) {
+                            $file = ResourceUtility::getFileArray($file);
+                        }
 
-		foreach ($identifier as $i) {
-			try {
-				if (TRUE === $treatIdAsUid) {
-					$file = $resourceFactory->getFileObject(intval($i));
-				} elseif (TRUE === $treatIdAsReference) {
-					$fileReference = $resourceFactory->getFileReferenceObject(intval($i));
-					$file = $fileReference->getOriginalFile();
-				} else {
-					$file = $resourceFactory->getFileObjectFromCombinedIdentifier($i);
-				}
+                        $files[] = $file;
+                    } catch (\Exception $e) {
+                        continue;
+                    }
+                }
 
-				if (TRUE === isset($fileUids) && FALSE === in_array($file->getUid(), $fileUids)) {
-					continue;
-				}
+                return $files;
+            }
+        }
 
-				if (TRUE === $onlyProperties) {
-					$file = $file->getProperties();
-				}
+        foreach ($identifier as $i) {
+            try {
+                if ($treatIdAsUid) {
+                    $file = $resourceFactory->getFileObject(intval($i));
+                } elseif ($treatIdAsReference) {
+                    $fileReference = $resourceFactory->getFileReferenceObject(intval($i));
+                    $file = $fileReference->getOriginalFile();
+                } else {
+                    $file = $resourceFactory->getFileObjectFromCombinedIdentifier($i);
+                }
 
-				$files[] = $file;
-			} catch (Exception $e) {
-				continue;
-			}
-		}
+                /** @var File|ProcessedFile|null $file */
+                if ($file === null) {
+                    continue;
+                }
 
-		return $files;
-	}
+                if (isset($fileUids) && !in_array($file->getUid(), $fileUids)) {
+                    continue;
+                }
 
-	/**
-	 * Mixed argument with CSV, array, Traversable
-	 *
-	 * @param mixed $argument
-	 * @param string $name
-	 * @return array
-	 */
-	public function arrayForMixedArgument($argument, $name) {
-		if (NULL === $argument) {
-			$argument = $this->arguments[$name];
-		}
+                if ($onlyProperties) {
+                    if ($file instanceof ProcessedFile) {
+                        $file = $file->toArray();
+                    } else {
+                        $file = ResourceUtility::getFileArray($file);
+                    }
+                }
 
-		if (TRUE === $argument instanceof Traversable) {
-			$argument = iterator_to_array($argument);
-		} elseif (TRUE === is_string($argument)) {
-			$argument = t3lib_div::trimExplode(',', $argument, TRUE);
-		} else {
-			$argument = (array) $argument;
-		}
+                $files[] = $file;
+            } catch (\Exception $e) {
+                continue;
+            }
+        }
 
-		return $argument;
-	}
+        return $files;
+    }
 
+    /**
+     * Mixed argument with CSV, array, Traversable
+     *
+     * @param mixed $argument
+     */
+    public function arrayForMixedArgument($argument, string $name): array
+    {
+        if (null === $argument) {
+            $argument = $this->arguments[$name];
+        }
+
+        if ($argument instanceof \Traversable) {
+            $argument = iterator_to_array($argument);
+        } elseif (is_string($argument)) {
+            $argument = GeneralUtility::trimExplode(',', $argument, true);
+        } else {
+            $argument = (array) $argument;
+        }
+
+        return $argument;
+    }
+
+    /**
+     * This fuction decides if sys_file or sys_file_metadata is used for a query on sys_category_record_mm
+     * This is neccessary because it depends on the TYPO3 version and the state of the extension filemetadata if
+     * 'sys_file' should be used or 'sys_file_metadata'.
+     */
+    private function getTablenameForSystemConfiguration(): string
+    {
+        return 'sys_file_metadata';
+    }
 }

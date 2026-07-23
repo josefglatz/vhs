@@ -1,0 +1,313 @@
+<?php
+
+namespace FluidTYPO3\Vhs\Service;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
+ *
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Utility\ContentObjectFetcher;
+use FluidTYPO3\Vhs\Utility\ParameterUtility;
+use FluidTYPO3\Vhs\Utility\RequestResolver;
+use TYPO3\CMS\Core\Context\Context;
+use TYPO3\CMS\Core\Context\LanguageAspect;
+use TYPO3\CMS\Core\Domain\Repository\PageRepository;
+use TYPO3\CMS\Core\SingletonInterface;
+use TYPO3\CMS\Core\Type\Bitmask\PageTranslationVisibility;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\RootlineUtility;
+use TYPO3\CMS\Core\Utility\VersionNumberUtility;
+
+/**
+ * Page Service
+ *
+ * Wrapper service for \TYPO3\CMS\Frontend\Page\PageRepository including static caches for
+ * menus, rootlines, pages and page overlays to be implemented in
+ * viewhelpers by replacing calls to \TYPO3\CMS\Frontend\Page\PageRepository::getMenu()
+ * and the like.
+ */
+class PageService implements SingletonInterface
+{
+    public const int DOKTYPE_MOVE_TO_PLACEHOLDER = 0;
+    public const int SHORTCUT_MODE_RANDOM_SUBPAGE = 2;
+
+    protected static array $cachedPages = [];
+    protected static array $cachedMenus = [];
+
+    public function getMenu(
+        int $pageUid,
+        array $excludePages = [],
+        bool $includeNotInMenu = false,
+        bool $includeMenuSeparator = false,
+        bool $disableGroupAccessCheck = false
+    ): array {
+        $pageRepository = $this->getPageRepository();
+        $pageConstraints = $this->getPageConstraints($excludePages, $includeNotInMenu, $includeMenuSeparator);
+        $cacheKey = md5($pageUid . $pageConstraints . (int) $disableGroupAccessCheck);
+        if (!isset(static::$cachedMenus[$cacheKey])) {
+            static::$cachedMenus[$cacheKey] = array_filter(
+                $pageRepository->getMenu($pageUid, '*', 'sorting', $pageConstraints, true, $disableGroupAccessCheck),
+                function ($page) use ($includeNotInMenu) {
+                    return (!($page['nav_hide'] ?? false) || $includeNotInMenu)
+                        && !$this->hidePageForLanguageUid($page);
+                }
+            );
+        }
+
+        return static::$cachedMenus[$cacheKey];
+    }
+
+    public function getPage(int $pageUid, bool $disableGroupAccessCheck = false): array
+    {
+        $cacheKey = md5($pageUid . (int) $disableGroupAccessCheck);
+        if (!isset(static::$cachedPages[$cacheKey])) {
+            static::$cachedPages[$cacheKey] = $this->getPageRepository()->getPage($pageUid, $disableGroupAccessCheck);
+        }
+
+        return static::$cachedPages[$cacheKey];
+    }
+
+    public function getRootLine(
+        ?int $pageUid = null,
+        bool $reverse = false
+    ): array {
+        $pageUid ??= RequestResolver::getPageUid();
+
+        if (!$pageUid) {
+            throw new \UnexpectedValueException('PageService::getRootLine requires a page UID', 1774448248);
+        }
+
+        /** @var RootlineUtility $rootLineUtility */
+        $rootLineUtility = GeneralUtility::makeInstance(RootlineUtility::class, $pageUid);
+        $rootline = $rootLineUtility->get();
+        if ($reverse) {
+            $rootline = array_reverse($rootline);
+        }
+        return $rootline;
+    }
+
+    protected function getPageConstraints(
+        array $excludePages = [],
+        bool $includeNotInMenu = false,
+        bool $includeMenuSeparator = false
+    ): string {
+        $constraints = [];
+
+        $types = [
+            PageRepository::DOKTYPE_BE_USER_SECTION,
+            PageRepository::DOKTYPE_SYSFOLDER
+        ];
+
+        if (version_compare(VersionNumberUtility::getCurrentTypo3Version(), '12.4', '<=')) {
+            $types[] = PageRepository::DOKTYPE_RECYCLER;
+        }
+
+        $constraints[] = 'doktype NOT IN (' . implode(',', $types) . ')';
+
+        if ($includeNotInMenu === false) {
+            $constraints[] = 'nav_hide = 0';
+        }
+
+        if ($includeMenuSeparator === false) {
+            $constraints[] = 'doktype != ' . PageRepository::DOKTYPE_SPACER;
+        }
+
+        if (0 < count($excludePages)) {
+            $constraints[] = 'uid NOT IN (' . implode(',', $excludePages) . ')';
+        }
+
+        return 'AND ' . implode(' AND ', $constraints);
+    }
+
+    /**
+     * @param array|integer|null $page
+     */
+    public function hidePageForLanguageUid($page = null, int $languageUid = -1, bool $normalWhenNoLanguage = true): bool
+    {
+        if (is_array($page)) {
+            $pageUid = $page['uid'];
+            $pageRecord = $page;
+        } else {
+            $pageUid = (0 === (int) $page) ? RequestResolver::getPageUid() : (int) $page;
+            $pageRecord = $this->getPage($pageUid);
+        }
+        if (-1 === $languageUid) {
+            if (class_exists(LanguageAspect::class)) {
+                /** @var Context $context */
+                $context = GeneralUtility::makeInstance(Context::class);
+                /** @var LanguageAspect $languageAspect */
+                $languageAspect = $context->getAspect('language');
+                $languageUid = $languageAspect->getId();
+            } else {
+                $languageUid = RequestResolver::getLanguage()->getLanguageId();
+            }
+        }
+
+        $l18nCfg = $pageRecord['l18n_cfg'] ?? 0;
+        if (class_exists(PageTranslationVisibility::class)) {
+            /** @var PageTranslationVisibility $visibilityBitSet */
+            $visibilityBitSet = GeneralUtility::makeInstance(
+                PageTranslationVisibility::class,
+                $l18nCfg
+            );
+            $hideIfNotTranslated = $visibilityBitSet->shouldHideTranslationIfNoTranslatedRecordExists();
+            $hideIfDefaultLanguage = $visibilityBitSet->shouldBeHiddenInDefaultLanguage();
+        } else {
+            $hideIfNotTranslated = (bool) GeneralUtility::hideIfNotTranslated($l18nCfg);
+            $hideIfDefaultLanguage = (bool) GeneralUtility::hideIfDefaultLanguage($l18nCfg);
+        }
+
+        $pageOverlay = [];
+        if (0 !== $languageUid) {
+            $pageOverlay = $this->getPageRepository()->getPageOverlay($pageUid, $languageUid);
+        }
+        $translationAvailable = (0 !== count($pageOverlay));
+
+        return
+            ($hideIfNotTranslated && (0 !== $languageUid) && !$translationAvailable) ||
+            ($hideIfDefaultLanguage && ((0 === $languageUid) || !$translationAvailable)) ||
+            (!$normalWhenNoLanguage && (0 !== $languageUid) && !$translationAvailable);
+    }
+
+    public function getItemLink(array $page, bool $forceAbsoluteUrl = false): string
+    {
+        $parameter = $page['uid'];
+        if ((int) $page['doktype'] === PageRepository::DOKTYPE_LINK) {
+            $redirectTo = $page['url'] ?? '';
+            if (!empty($redirectTo)) {
+                $uI = parse_url($redirectTo);
+                // If relative path, prefix Site URL
+                // If it's a valid email without protocol, add "mailto:"
+                if (!($uI['scheme'] ?? false)) {
+                    if (GeneralUtility::validEmail($redirectTo)) {
+                        $redirectTo = 'mailto:' . $redirectTo;
+                    } elseif ($redirectTo[0] !== '/') {
+                        $redirectTo = ParameterUtility::resolveParameterValue('TYPO3_SITE_URL') . $redirectTo;
+                    }
+                }
+                $parameter = $redirectTo;
+            }
+        }
+        $config = [
+            'parameter' => $parameter,
+            'returnLast' => 'url',
+            'additionalParams' => '',
+            'forceAbsoluteUrl' => $forceAbsoluteUrl,
+        ];
+
+        return ContentObjectFetcher::resolve()->typoLink_URL($config);
+    }
+
+    public function isAccessProtected(array $page): bool
+    {
+        return (0 !== (int) $page['fe_group']);
+    }
+
+    public function isAccessGranted(array $page): bool
+    {
+        if (!$this->isAccessProtected($page)) {
+            return true;
+        }
+
+        $groups = GeneralUtility::intExplode(',', (string) $page['fe_group']);
+
+        $hide = (in_array(-1, $groups));
+        $show = (in_array(-2, $groups));
+
+        $userIsLoggedIn = RequestResolver::isFrontendUserLoggedIn();
+        if (!$userIsLoggedIn) {
+            return $hide;
+        }
+
+        $frontendUser = RequestResolver::getFrontendUser();
+        $userGroups = $frontendUser?->groupData['uid'] ?? [];
+        $userIsInGrantedGroups = (0 < count(array_intersect($userGroups, $groups)));
+
+        return $show || $userIsInGrantedGroups;
+    }
+
+    public function isCurrent(int $pageUid): bool
+    {
+        return $pageUid === RequestResolver::getPageUid();
+    }
+
+    public function isActive(int $pageUid): bool
+    {
+        $rootLineData = $this->getRootLine();
+        foreach ($rootLineData as $page) {
+            if ((int) $page['uid'] === $pageUid) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function shouldUseShortcutTarget(array $arguments): bool
+    {
+        $useShortcutTarget = (bool) $arguments['useShortcutData'];
+        if (array_key_exists('useShortcutTarget', $arguments)) {
+            $useShortcutTarget = (bool) $arguments['useShortcutTarget'];
+        }
+
+        return $useShortcutTarget;
+    }
+
+    public function shouldUseShortcutUid(array $arguments): bool
+    {
+        $useShortcutUid = (bool) $arguments['useShortcutData'];
+        if (array_key_exists('useShortcutUid', $arguments)) {
+            $useShortcutUid = (bool) $arguments['useShortcutUid'];
+        }
+
+        return $useShortcutUid;
+    }
+
+    /**
+     * Determines the target page record for the provided page record
+     * if it is configured as a shortcut in any of the possible modes.
+     * Returns NULL otherwise.
+     */
+    public function getShortcutTargetPage(array $page): ?array
+    {
+        $dokType = (int) ($page['doktype'] ?? PageRepository::DOKTYPE_DEFAULT);
+        if ($dokType !== PageRepository::DOKTYPE_SHORTCUT) {
+            return null;
+        }
+        $originalPageUid = $page['uid'];
+        switch ($page['shortcut_mode']) {
+            case PageRepository::SHORTCUT_MODE_PARENT_PAGE:
+                $targetPage = $this->getPage($page['pid']);
+                break;
+            case self::SHORTCUT_MODE_RANDOM_SUBPAGE:
+                $menu = $this->getMenu($page['shortcut'] > 0 ? $page['shortcut'] : $originalPageUid);
+                $targetPage = (0 < count($menu)) ? $menu[array_rand($menu)] : $page;
+                break;
+            case PageRepository::SHORTCUT_MODE_FIRST_SUBPAGE:
+                $menu = $this->getMenu($page['shortcut'] > 0 ? $page['shortcut'] : $originalPageUid);
+                $targetPage = (0 < count($menu)) ? reset($menu) : $page;
+                break;
+            case PageRepository::SHORTCUT_MODE_NONE:
+            default:
+                $targetPage = $this->getPage($page['shortcut']);
+        }
+        return $targetPage;
+    }
+
+    /**
+     * @return PageRepository
+     * @codeCoverageIgnore
+     */
+    public function getPageRepository()
+    {
+        static $instance = null;
+        if ($instance === null) {
+            /** @var PageRepository $instance */
+            $instance = GeneralUtility::makeInstance(PageRepository::class);
+        }
+        return $instance;
+    }
+}

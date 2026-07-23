@@ -1,108 +1,110 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Page\Header;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Danilo Bürger <danilo.buerger@hmspl.de>, Heimspiel GmbH
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Traits\PageRendererTrait;
+use FluidTYPO3\Vhs\Traits\TagViewHelperCompatibility;
+use FluidTYPO3\Vhs\Utility\ContextUtility;
+use FluidTYPO3\Vhs\Utility\RequestResolver;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
 
 /**
  * Returns the current canonical url in a link tag.
- *
- * @author Danilo Bürger <danilo.buerger@hmspl.de>, Heimspiel GmbH
- * @package Vhs
- * @subpackage ViewHelpers\Page\Header
  */
-class Tx_Vhs_ViewHelpers_Page_Header_CanonicalViewHelper extends  Tx_Fluid_Core_ViewHelper_AbstractTagBasedViewHelper {
+class CanonicalViewHelper extends AbstractTagBasedViewHelper
+{
+    use PageRendererTrait;
+    use TagViewHelperCompatibility;
 
-	/**
-	 * @var Tx_Vhs_Service_PageSelectService
-	 */
-	protected $pageSelect;
+    /**
+     * @var string
+     */
+    protected $tagName = 'link';
 
-	/**
-	 * @param Tx_Vhs_Service_PageSelectService $pageSelectService
-	 * @return void
-	 */
-	public function injectPageSelectService(Tx_Vhs_Service_PageSelectService $pageSelectService) {
-		$this->pageSelect = $pageSelectService;
-	}
+    public function initializeArguments(): void
+    {
+        parent::initializeArguments();
+        $this->registerUniversalTagAttributes();
+        $this->registerArgument('pageUid', 'integer', 'The page uid to check', false, 0);
+        $this->registerArgument(
+            'queryStringMethod',
+            'string',
+            'From which place to add parameters. Values: "GET", "POST" and "GET,POST". See ' .
+            'https://docs.typo3.org/typo3cms/TyposcriptReference/Functions/Typolink/Index.html, addQueryString.method',
+            false,
+            'GET'
+        );
+        $this->registerArgument(
+            'normalWhenNoLanguage',
+            'boolean',
+            'DEPRECATED: Visibility is now handled by core\'s typolink function.'
+        );
+    }
 
-	/**
-	 * @var string
-	 */
-	protected $tagName = 'link';
+    public function render(): string
+    {
+        if (ContextUtility::isBackend()) {
+            return '';
+        }
 
-	/**
-	 * Initialize
-	 *
-	 * @return void
-	 */
-	public function initializeArguments() {
-		$this->registerUniversalTagAttributes();
-		$this->registerArgument('pageUid', 'integer', 'The page uid to check', FALSE, 0);
-		$this->registerArgument('normalWhenNoLanguage', 'boolean', 'If TRUE, a missing page overlay should be ignored', FALSE, FALSE);
-	}
+        /** @var int $pageUid */
+        $pageUid = $this->arguments['pageUid'];
+        $pageUid = (int) $pageUid;
+        if (0 === $pageUid) {
+            $pageUid = $GLOBALS['TSFE']->id;
+        }
 
-	/**
-	 * @return string
-	 */
-	public function render() {
-		if (TYPO3_MODE == 'BE') {
-			return;
-		}
+        /** @var string $queryStringMethod */
+        $queryStringMethod = $this->arguments['queryStringMethod'];
+        if (!in_array($queryStringMethod, ['GET', 'POST', 'GET,POST'], true)) {
+            throw new \InvalidArgumentException(
+                'The parameter "queryStringMethods" must be one of "GET", "POST" or "GET,POST".',
+                1475337546
+            );
+        }
 
-		$pageUid = $this->arguments['pageUid'];
-		$normalWhenNoLanguage = $this->arguments['normalWhenNoLanguage'];
+        /** @var UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+        $uriBuilder->setRequest(RequestResolver::resolveRequestFromRenderingContext($this->renderingContext));
 
-		if (0 === $pageUid) {
-			$pageUid = $GLOBALS['TSFE']->id;
-		}
+        $uriBuilder = $uriBuilder->reset()
+            ->setTargetPageUid($pageUid)
+            ->setCreateAbsoluteUri(true)
+            ->setAddQueryString(true)
+            ->setArgumentsToBeExcludedFromQueryString(['id']);
+        if (method_exists($uriBuilder, 'setAddQueryStringMethod')) {
+            $uriBuilder->setAddQueryStringMethod($queryStringMethod);
+        }
+        if (method_exists($uriBuilder, 'setUseCacheHash')) {
+            $uriBuilder->setUseCacheHash(true);
+        }
 
-		$currentLanguageUid = $GLOBALS['TSFE']->sys_language_uid;
-		$languageUid = 0;
-		if (FALSE === $this->pageSelect->hidePageForLanguageUid($pageUid, $currentLanguageUid, $normalWhenNoLanguage)) {
-			$languageUid = $currentLanguageUid;
-		} else if (0 !== $currentLanguageUid) {
-			if (TRUE === $this->pageSelect->hidePageForLanguageUid($pageUid, 0, $normalWhenNoLanguage)) {
-				return;
-			}
-		}
+        $uri = $uriBuilder->build();
 
-		$uriBuilder = $this->controllerContext->getUriBuilder();
-		$uri = $uriBuilder->reset()
-			->setTargetPageUid($pageUid)
-			->setCreateAbsoluteUri(TRUE)
-			->setArguments(array('L' => $languageUid))
-			->build();
+        if (empty($uri)) {
+            return '';
+        }
 
-		$this->tag->addAttribute('rel', 'canonical');
-		$this->tag->addAttribute('href', $uri);
+        $uri = $GLOBALS['TSFE']->baseUrlWrap($uri);
 
-		$renderedTag = $this->tag->render();
+        $this->tag->addAttribute('rel', 'canonical');
+        $this->tag->addAttribute('href', $uri, false);
 
-		if (1 === intval($GLOBALS['TSFE']->config['config']['disableAllHeaderCode'])) {
-			return $renderedTag;
-		}
+        $renderedTag = $this->tag->render();
 
-		$GLOBALS['TSFE']->getPageRenderer()->addMetaTag($renderedTag);
-	}
+        if (1 === (int) $GLOBALS['TSFE']->config['config']['disableAllHeaderCode']) {
+            return $renderedTag;
+        }
 
+        static::getPageRenderer()->addHeaderData($renderedTag);
+        return '';
+    }
 }

@@ -1,27 +1,16 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Format;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Core\ViewHelper\AbstractViewHelper;
+use FluidTYPO3\Vhs\Utility\ErrorUtility;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
 
 /**
  * ### Date range calculation/formatting ViewHelper
@@ -50,7 +39,7 @@
  *     DateTime corresponding to "intervalFormat" into the future/past.
  *   - if "return" is a string such as "w", "d", "h" etc. the corresponding
  *     counter value (weeks, days, hours etc.) is returned.
- *   - if "return" is an array of counter IDs, for example Array("w", "d"),
+ *   - if "return" is an array of counter IDs, for example ["w", "d"],
  *     the corresponding counters from the range are returned as an array.
  *
  * #### Note about LLL support and array consumers
@@ -59,9 +48,11 @@
  * array, the output becomes suitable for consumption by f:translate, v:l
  * or f:format.sprintf for example - as the "arguments" attribute:
  *
- *     <f:translate key="myDateDisplay"
- *         arguments="{v:format.dateRange(intervalFormat: 'P3W', return: {0: 'w', 1: 'd'})}"
- *     />
+ * ```
+ * <f:translate key="myDateDisplay"
+ *     arguments="{v:format.dateRange(intervalFormat: 'P3W', return: {0: 'w', 1: 'd'})}"
+ * />
+ * ```
  *
  * Which if "myDateDisplay" is a string such as "Deadline: %d week(s) and
  * %d day(s)" would output a result such as "Deadline: 4 week(s) and 2 day(s)".
@@ -70,144 +61,185 @@
  * > value return modes, are also nicely consumable by the "math" suite
  * > of ViewHelpers, for example `v:math.division` would be able to divide
  * > number of days by two, three etc. to further divide the date range.
- *
- * @author Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- * @package Vhs
- * @subpackage ViewHelpers\Format
  */
-class Tx_Vhs_ViewHelpers_Format_DateRangeViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class DateRangeViewHelper extends AbstractViewHelper
+{
+    /**
+     * @var boolean
+     */
+    protected $escapingInterceptorEnabled = false;
 
-	/**
-	 * @var boolean
-	 */
-	protected $escapingInterceptorEnabled = FALSE;
+    public function initializeArguments(): void
+    {
+        $this->registerArgument(
+            'start',
+            'mixed',
+            'Start date which can be a DateTime object or a string consumable by DateTime constructor',
+            false,
+            'now'
+        );
+        $this->registerArgument(
+            'end',
+            'mixed',
+            'End date which can be a DateTime object or a string consumable by DateTime constructor'
+        );
+        $this->registerArgument(
+            'intervalFormat',
+            'string',
+            'Interval format consumable by DateInterval'
+        );
+        $this->registerArgument(
+            'format',
+            'string',
+            'Date format to apply to both start and end date',
+            false,
+            'Y-m-d'
+        );
+        $this->registerArgument('startFormat', 'string', 'Date format to apply to start date');
+        $this->registerArgument('endFormat', 'string', 'Date format to apply to end date');
+        $this->registerArgument('glue', 'string', 'Glue string to concatenate dates with', false, '-');
+        $this->registerArgument(
+            'spaceGlue',
+            'boolean',
+            'If TRUE glue string is surrounded with whitespace',
+            false,
+            true
+        );
+        $this->registerArgument(
+            'return',
+            'mixed',
+            'Return type; can be exactly "DateTime" to return a DateTime instance, a string like "w" or "d" to ' .
+            'return weeks, days between the two dates - or an array of w, d, etc. strings to return the ' .
+            'corresponding range count values as an array.'
+        );
+    }
 
-	/**
-	 * @return void
-	 */
-	public function initializeArguments() {
-		$this->registerArgument('start', 'mixed', 'Start date which can be a DateTime object or a string consumable by DateTime constructor', FALSE, 'now');
-		$this->registerArgument('end', 'mixed', 'End date which can be a DateTime object or a string consumable by DateTime constructor', FALSE, NULL);
-		$this->registerArgument('intervalFormat', 'string', 'Interval format consumable by DateInterval', FALSE, NULL);
-		$this->registerArgument('format', 'string', 'Date format to apply to both start and end date', FALSE, 'Y-m-d');
-		$this->registerArgument('startFormat', 'string', 'Date format to apply to start date', FALSE, NULL);
-		$this->registerArgument('endFormat', 'string', 'Date format to apply to end date', FALSE, NULL);
-		$this->registerArgument('glue', 'string', 'Glue string to concatenate dates with', FALSE, '-');
-		$this->registerArgument('spaceGlue', 'boolean', 'If TRUE glue string is surrounded with whitespace', FALSE, TRUE);
-		$this->registerArgument('return', 'mixed', 'Return type; can be exactly "DateTime" to return a DateTime instance, a string like "w" ' .
-			'or "d" to return weeks, days between the two dates - or an array of w, d, etc. strings to return the corresponding range count values as an array.', FALSE, NULL);
-	}
+    /**
+     * @return mixed
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        /** @var string|null $start */
+        $start = $renderChildrenClosure() ?? $arguments['start'] ?? 'now';
+        if (empty($arguments['start'])) {
+            $start = 'now';
+        }
+        $startDateTime = static::enforceDateTime($start);
 
-	/**
-	 * Render method
-	 *
-	 * @throws Tx_Fluid_Core_ViewHelper_Exception
-	 * @return mixed
-	 */
-	public function render() {
-		if (TRUE === isset($this->arguments['start']) && FALSE === empty($this->arguments['start'])) {
-			$start = $this->arguments['start'];
-		} else {
-			$start = 'now';
-		}
-		$startDateTime = $this->enforceDateTime($start);
+        /** @var string|null $end */
+        $end = $arguments['end'];
+        $endDateTime = null;
+        if (!empty($end)) {
+            $endDateTime = static::enforceDateTime($end);
+        }
 
-		if (TRUE === isset($this->arguments['end']) && FALSE === empty($this->arguments['end'])) {
-			$endDateTime = $this->enforceDateTime($this->arguments['end']);
-		} else {
-			$endDateTime = NULL;
-		}
+        $intervalFormat = null;
+        if (!empty($arguments['intervalFormat'])) {
+            /** @var string $intervalFormat */
+            $intervalFormat = $arguments['intervalFormat'];
+        }
 
-		if (TRUE === isset($this->arguments['intervalFormat']) && FALSE === empty($this->arguments['intervalFormat'])) {
-			$intervalFormat = $this->arguments['intervalFormat'];
-		}
+        if (null === $intervalFormat && null === $endDateTime) {
+            ErrorUtility::throwViewHelperException('Either end or intervalFormat has to be provided.', 1369573110);
+        }
 
-		if (NULL === $intervalFormat && NULL === $endDateTime) {
-			throw new Tx_Fluid_Core_ViewHelper_Exception('Either end or intervalFormat has to be provided.', 1369573110);
-		}
+        $interval = null;
+        if ($intervalFormat !== null) {
+            try {
+                $interval = new \DateInterval($intervalFormat);
+            } catch (\Exception | \Error $exception) {
+                ErrorUtility::throwViewHelperException(
+                    '"' . $intervalFormat . '" could not be parsed by \DateInterval constructor.',
+                    1369573111
+                );
+            }
+        } elseif ($endDateTime instanceof \DateTime) {
+            $interval = $endDateTime->diff($startDateTime);
+        }
 
-		if (TRUE === isset($intervalFormat) && NULL !== $intervalFormat) {
-			try {
-				$interval = new \DateInterval($intervalFormat);
-			} catch (\Exception $exception) {
-				throw new Tx_Fluid_Core_ViewHelper_Exception('"' . $intervalFormat . '" could not be parsed by \DateInterval constructor.', 1369573111);
-			}
-		} else {
-			$interval = $endDateTime->diff($startDateTime);
-		}
+        if (null !== $interval && null === $endDateTime) {
+            $endDateTime = new \DateTime();
+            $endDateTime->add($endDateTime->diff($startDateTime));
+            $endDateTime->add($interval);
+        }
 
-		if (NULL !== $interval && NULL === $endDateTime) {
-			$endDateTime = new DateTime();
-			$endDateTime->add($endDateTime->diff($startDateTime));
-			$endDateTime->add($interval);
-		}
+        $output = null;
+        $return = $arguments['return'];
+        if (null === $return) {
+            $spaceGlue = (bool) $arguments['spaceGlue'];
+            /** @var string $glue */
+            $glue = $arguments['glue'];
+            /** @var string $startFormat */
+            $startFormat = $arguments['format'] ?? '';
+            /** @var string $endFormat */
+            $endFormat = $arguments['format'] ?? '';
+            if (!empty($arguments['startFormat'])) {
+                /** @var string $startFormat */
+                $startFormat = $arguments['startFormat'];
+            }
+            if (!empty($arguments['endFormat'])) {
+                /** @var string $endFormat */
+                $endFormat = $arguments['endFormat'];
+            }
+            $output = static::formatDate($startDateTime, $startFormat);
+            $output .= true === $spaceGlue ? ' ' : '';
+            $output .= $glue;
+            $output .= true === $spaceGlue ? ' ' : '';
+            $output .= static::formatDate($endDateTime ?? new \DateTime('now'), $endFormat);
+        } elseif ('DateTime' === $return) {
+            $output = $endDateTime;
+        } elseif (is_string($return) && $interval instanceof \DateInterval) {
+            if (false === strpos($return, '%')) {
+                $return = '%' . $return;
+            }
+            $output = $interval->format($return);
+        } elseif (is_array($return) && $interval instanceof \DateInterval) {
+            $output = [];
+            foreach ($return as $format) {
+                if (false === strpos($format, '%')) {
+                    $format = '%' . $format;
+                }
+                $output[] = $interval->format($format);
+            }
+        }
+        return $output;
+    }
 
-		$return = $this->arguments['return'];
-		if (NULL === $return) {
-			$spaceGlue = (boolean) $this->arguments['spaceGlue'];
-			$glue = strval($this->arguments['glue']);
-			$startFormat = $this->arguments['format'];
-			$endFormat = $this->arguments['format'];
-			if (NULL !== $this->arguments['startFormat'] && FALSE === empty($this->arguments['startFormat'])) {
-				$startFormat = $this->arguments['startFormat'];
-			}
-			if (NULL !== $this->arguments['endFormat'] && FALSE === empty($this->arguments['endFormat'])) {
-				$endFormat = $this->arguments['endFormat'];
-			}
-			$output  = $this->formatDate($startDateTime, $startFormat);
-			$output .= TRUE === $spaceGlue ? ' ' : '';
-			$output .= $glue;
-			$output .= TRUE === $spaceGlue ? ' ' : '';
-			$output .= $this->formatDate($endDateTime, $endFormat);
-		} elseif ('DateTime' === $return) {
-			$output = $endDateTime;
-		} elseif (TRUE === is_string($return)) {
-			if (FALSE === strpos($return, '%')) {
-				$return = '%' . $return;
-			}
-			$output = $interval->format($return);
-		} elseif (TRUE === is_array($return)) {
-			$output = array();
-			foreach ($return as $format) {
-				if (FALSE === strpos($format, '%')) {
-					$format = '%' . $format;
-				}
-				array_push($output, $interval->format($format));
-			}
-		}
-		return $output;
-	}
+    /**
+     * @param \DateTime|scalar|null $date
+     */
+    protected static function enforceDateTime($date): \DateTime
+    {
+        if (!$date instanceof \DateTime) {
+            try {
+                $input = $date;
+                if (is_integer($date)) {
+                    $date = new \DateTime('@' . $date);
+                } elseif (is_scalar($date)) {
+                    $date = new \DateTime((string) $date);
+                } else {
+                    $date = new \DateTime('now');
+                }
+                $date->setTimezone(new \DateTimeZone(date_default_timezone_get()));
+            } catch (\Exception | \Error $exception) {
+                ErrorUtility::throwViewHelperException(
+                    '"' . (string) $input . '" could not be parsed by \DateTime constructor.',
+                    1369573112
+                );
+            }
+        }
+        /** @var \DateTime $date */
+        return $date;
+    }
 
-	/**
-	 * @param mixed $date
-	 * @return \DateTime
-	 * @throws Tx_Fluid_Core_ViewHelper_Exception
-	 */
-	protected function enforceDateTime($date) {
-		if (FALSE === ($date instanceof \DateTime)) {
-			try {
-				if (is_integer($date)) {
-					$date = new \DateTime('@' . $date);
-				} else {
-					$date = new \DateTime($date);
-				}
-			} catch (\Exception $exception) {
-				throw new Tx_Fluid_Core_ViewHelper_Exception('"' . $date . '" could not be parsed by \DateTime constructor.', 1369573112);
-			}
-		}
-		return $date;
-	}
-
-	/**
-	 * @param \DateTime $date
-	 * @param string $format
-	 * @return string
-	 */
-	protected function formatDate($date, $format = 'Y-m-d') {
-		if (strpos($format, '%') !== FALSE) {
-			return strftime($format, $date->format('U'));
-		} else {
-			return $date->format($format);
-		}
-	}
+    protected static function formatDate(\DateTime $date, string $format = 'Y-m-d'): string
+    {
+        if (false !== strpos($format, '%')) {
+            return (string) strftime($format, (int) $date->format('U'));
+        }
+        return $date->format($format);
+    }
 }

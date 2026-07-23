@@ -1,86 +1,80 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Media;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Proxy\ResourceFactoryProxy;
+use FluidTYPO3\Vhs\Tests\Fixtures\Classes\AccessibleExtensionManagementUtility;
+use FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\AbstractViewHelperTest;
+use FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\AbstractViewHelperTestCase;
+use TYPO3\CMS\Core\Package\PackageManager;
 
 /**
- * @author Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- * @package Vhs
+ * Class FilesViewHelperTest
  */
-class Tx_Vhs_ViewHelpers_Media_FilesViewHelperTest extends Tx_Extbase_Tests_Unit_BaseTestCase {
+class FilesViewHelperTest extends AbstractViewHelperTestCase
+{
+    /**
+     * @var string
+     */
+    protected $fixturesPath;
 
-	/**
-	 * @var string
-	 */
-	protected $fixturesPath;
+    /**
+     * Setup
+     */
+    public function setUp(): void
+    {
+        $this->singletonInstances[ResourceFactoryProxy::class] = $this->getMockBuilder(ResourceFactoryProxy::class)->disableOriginalConstructor()->getMock();
+        parent::setUp();
+        $this->fixturesPath = 'EXT:vhs/Tests/Fixtures/Files';
+        $packageManager = $this->getMockBuilder(PackageManager::class)->setMethods(['resolvePackagePath'])->disableOriginalConstructor()->getMock();
+        $packageManager->method('resolvePackagePath')->willReturnMap(
+            [
+                ['EXT:vhs/Tests/Fixtures/Files/typo3_logo.jpg', 'Tests/Fixtures/Files/typo3_logo.jpg'],
+                ['EXT:vhs/Tests/Fixtures/Files', 'Tests/Fixtures/Files'],
+            ]
+        );
+        AccessibleExtensionManagementUtility::setPackageManager($packageManager);
+    }
 
-	public function setUp() {
-		$this->fixturesPath = dirname(__FILE__) . '/../../../Fixtures/Files';
-	}
+    /**
+     * @test
+     */
+    public function returnsEmtpyArrayWhenArgumentsAreNotSet()
+    {
+        $this->assertEquals([], $this->executeViewHelper());
+    }
 
-	/**
-	 * @test
-	 */
-	public function returnsEmtpyArrayWhenArgumentsAreNotSet() {
-		$viewHelper = $this->getMock('Tx_Vhs_ViewHelpers_Media_FilesViewHelper', array('renderChildren'));
-		$viewHelper->expects($this->once())->method('renderChildren')->will($this->returnValue(NULL));
+    /**
+     * @test
+     */
+    public function returnsEmptyArrayWhenPathIsInaccessible()
+    {
+        $this->assertEquals([], $this->executeViewHelperUsingTagContent('/this/path/hopefully/does/not/exist'));
+    }
 
-		$this->assertEquals(array(), $viewHelper->render());
-	}
+    /**
+     * @test
+     */
+    public function returnsPopulatedArrayOfAllFoundFiles()
+    {
+        $actualFiles = glob($this->fixturesPath . '/*');
+        $actualFilesCount = count($actualFiles);
+        $this->assertCount($actualFilesCount, $this->executeViewHelperUsingTagContent($this->fixturesPath));
+    }
 
-	/**
-	 * @test
-	 */
-	public function returnsEmptyArrayWhenPathIsInaccessible() {
-		$viewHelper = $this->getMock('Tx_Vhs_ViewHelpers_Media_FilesViewHelper', array('renderChildren'));
-		$viewHelper->expects($this->once())->method('renderChildren')->will($this->returnValue('/this/path/hopefully/does/not/exist'));
-
-		$this->assertEquals(array(), $viewHelper->render());
-	}
-
-	/**
-	 * @test
-	 */
-	public function returnsPopulatedArrayOfAllFoundFiles() {
-		$viewHelper = $this->getMock('Tx_Vhs_ViewHelpers_Media_FilesViewHelper', array('renderChildren'));
-		$viewHelper->expects($this->once())->method('renderChildren')->will($this->returnValue($this->fixturesPath));
-		$actualFiles = glob($this->fixturesPath . '/*');
-		$actualFilesCount = count($actualFiles);
-
-		$this->assertCount($actualFilesCount, $viewHelper->render());
-	}
-
-	/**
-	 * @test
-	 */
-	public function returnsPopulatedArrayOfFilteredFiles() {
-		$viewHelper = $this->getMock('Tx_Vhs_ViewHelpers_Media_FilesViewHelper', array('renderChildren'));
-		$viewHelper->expects($this->once())->method('renderChildren')->will($this->returnValue($this->fixturesPath));
-		$viewHelper->setArguments(array('extensionList' => 'txt'));
-		$actualFiles = glob($this->fixturesPath . '/*.txt');
-		$actualFilesCount = count($actualFiles);
-
-		$this->assertCount($actualFilesCount, $viewHelper->render());
-	}
-
+    /**
+     * @test
+     */
+    public function returnsPopulatedArrayOfFilteredFiles()
+    {
+        $actualFiles = glob($this->fixturesPath . '/*.txt');
+        $actualFilesCount = count($actualFiles);
+        $this->assertCount($actualFilesCount, $this->executeViewHelperUsingTagContent($this->fixturesPath));
+    }
 }

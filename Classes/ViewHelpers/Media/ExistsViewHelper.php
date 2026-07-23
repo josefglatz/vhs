@@ -1,69 +1,43 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Media;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2011 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Utility\CoreUtility;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractConditionViewHelper;
 
 /**
- * File/Directory Exists Condition ViewHelper
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Media
+ * File/Directory Exists Condition ViewHelper.
  */
-class Tx_Vhs_ViewHelpers_Media_ExistsViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractConditionViewHelper {
+class ExistsViewHelper extends AbstractConditionViewHelper
+{
+    public function initializeArguments(): void
+    {
+        parent::initializeArguments();
+        $this->registerArgument('file', 'string', 'Filename which must exist to trigger f:then rendering');
+        $this->registerArgument('directory', 'string', 'Directory which must exist to trigger f:then rendering');
+    }
 
-	/**
-	 * Initialize arguments
-	 *
-	 * @return void
-	 */
-	public function initializeArguments() {
-		parent::initializeArguments();
-		$this->registerArgument('file', 'string', 'Filename which must exist to trigger f:then rendering', FALSE);
-		$this->registerArgument('directory', 'string', 'Directory which must exist to trigger f:then rendering', FALSE);
-	}
-
-	/**
-	 * Render method
-	 *
-	 * @return string
-	 */
-	public function render() {
-
-		$file = t3lib_div::getFileAbsFileName($this->arguments['file']);
-		$directory = $this->arguments['directory'];
-
-		$evaluation = FALSE;
-		if (isset($this->arguments['file'])) {
-			$evaluation = (file_exists($file) || file_exists(constant('PATH_site') . $file)) && is_file($file);
-		} elseif (isset($this->arguments['directory'])) {
-			$evaluation = (is_dir($directory) || is_dir(constant('PATH_site') . $directory));
-		}
-
-		if ($evaluation !== FALSE) {
-			return $this->renderThenChild();
-		}
-		return $this->renderElseChild();
-	}
-
+    public static function verdict(array $arguments, RenderingContextInterface $renderingContext): bool
+    {
+        /** @var string $file */
+        $file = $arguments['file'];
+        $file = GeneralUtility::getFileAbsFileName((string) $file);
+        /** @var string $directory */
+        $directory = $arguments['directory'];
+        $evaluation = false;
+        if (isset($arguments['file'])) {
+            $evaluation = ((file_exists($file) || file_exists(CoreUtility::getSitePath() . $file)) && is_file($file));
+        } elseif (isset($arguments['directory'])) {
+            $evaluation = (is_dir($directory) || is_dir(CoreUtility::getSitePath() . $directory));
+        }
+        return $evaluation;
+    }
 }

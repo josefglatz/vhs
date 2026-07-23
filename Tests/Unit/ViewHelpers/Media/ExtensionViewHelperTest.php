@@ -1,67 +1,69 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\Media;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Proxy\ResourceFactoryProxy;
+use FluidTYPO3\Vhs\Tests\Fixtures\Classes\AccessibleExtensionManagementUtility;
+use FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\AbstractViewHelperTest;
+use FluidTYPO3\Vhs\Tests\Unit\ViewHelpers\AbstractViewHelperTestCase;
+use TYPO3\CMS\Core\Package\PackageManager;
 
 /**
- * @author Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- * @package Vhs
+ * Class ExtensionViewHelperTest
  */
-class Tx_Vhs_ViewHelpers_Media_ExtensionViewHelperTest extends Tx_Extbase_Tests_Unit_BaseTestCase {
+class ExtensionViewHelperTest extends AbstractViewHelperTestCase
+{
+    /**
+     * @var string
+     */
+    protected $fixturesPath;
 
-	/**
-	 * @var string
-	 */
-	protected $fixturesPath;
+    /**
+     * Setup
+     */
+    public function setUp(): void
+    {
+        $this->singletonInstances[ResourceFactoryProxy::class] = $this->getMockBuilder(ResourceFactoryProxy::class)->disableOriginalConstructor()->getMock();
+        parent::setUp();
+        $this->fixturesPath = 'Tests/Fixtures/Files';
+        $packageManager = $this->getMockBuilder(PackageManager::class)->setMethods(['resolvePackagePath'])->disableOriginalConstructor()->getMock();
+        $packageManager->method('resolvePackagePath')->willReturnMap(
+            [
+                ['EXT:vhs/Tests/Fixtures/Files/foo.txt', 'Tests/Fixtures/Files/foo.txt'],
+                ['EXT:vhs/Tests/Fixtures/Files/noext', 'Tests/Fixtures/Files/noext'],
+                ['EXT:vhs/Tests/Fixtures/Files', 'Tests/Fixtures/Files'],
+            ]
+        );
+        AccessibleExtensionManagementUtility::setPackageManager($packageManager);
+    }
 
-	public function setUp() {
-		$this->fixturesPath = 'EXT:vhs/Tests/Fixtures/Files';
-	}
+    /**
+     * @test
+     */
+    public function returnsEmptyStringForEmptyArguments()
+    {
+        $this->assertEquals('', $this->executeViewHelper());
+    }
 
-	/**
-	 * @test
-	 */
-	public function returnsEmptyStringForEmptyArguments() {
-		$viewHelper = $this->getMock('Tx_Vhs_ViewHelpers_Media_ExtensionViewHelper', array('renderChildren'));
-		$viewHelper->expects($this->once())->method('renderChildren')->will($this->returnValue(NULL));
-		$this->assertEquals('', $viewHelper->render());
-	}
+    /**
+     * @test
+     */
+    public function returnsExpectedExtensionForProvidedPath()
+    {
+        $this->assertEquals('txt', $this->executeViewHelperUsingTagContent($this->fixturesPath . '/foo.txt'));
+    }
 
-	/**
-	 * @test
-	 */
-	public function returnsExpectedExtensionForProvidedPath() {
-		$viewHelper = $this->getMock('Tx_Vhs_ViewHelpers_Media_ExtensionViewHelper', array('renderChildren'));
-		$viewHelper->expects($this->once())->method('renderChildren')->will($this->returnValue($this->fixturesPath . '/foo.txt'));
-		$this->assertEquals('txt', $viewHelper->render());
-	}
-
-	/**
-	 * @test
-	 */
-	public function returnsEmptyStringForFileWithoutExtension() {
-		$viewHelper = $this->getMock('Tx_Vhs_ViewHelpers_Media_ExtensionViewHelper', array('renderChildren'));
-		$viewHelper->expects($this->once())->method('renderChildren')->will($this->returnValue($this->fixturesPath . '/noext'));
-		$this->assertEquals('', $viewHelper->render());
-	}
+    /**
+     * @test
+     */
+    public function returnsEmptyStringForFileWithoutExtension()
+    {
+        $this->assertEquals('', $this->executeViewHelperUsingTagContent($this->fixturesPath . '/noext'));
+    }
 }

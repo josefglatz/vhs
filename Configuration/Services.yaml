@@ -1,0 +1,32 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+    public: false
+
+  FluidTYPO3\Vhs\ViewHelpers\:
+    resource: '../Classes/ViewHelpers/*'
+    public: true
+
+  FluidTYPO3\Vhs\:
+    resource: '../Classes/*'
+
+  FluidTYPO3\Vhs\Proxy\DispatcherProxy:
+    public: true
+
+  FluidTYPO3\Vhs\Proxy\SiteFinderProxy:
+    public: true
+
+  FluidTYPO3\Vhs\Proxy\ResourceFactoryProxy:
+    public: true
+
+  FluidTYPO3\Vhs\Proxy\FileRepositoryProxy:
+    public: true
+
+  FluidTYPO3\Vhs\Service\PageService:
+    public: true
+
+  TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder:
+    autowire: true
+    public: true
+    shared: false

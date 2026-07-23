@@ -1,84 +1,86 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Math;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Core\ViewHelper\AbstractViewHelper;
+use FluidTYPO3\Vhs\Traits\ArrayConsumingViewHelperTrait;
+use FluidTYPO3\Vhs\Utility\ErrorUtility;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Exception;
 
 /**
  * Base class: Math ViewHelpers operating on one number or an
  * array of numbers.
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers
  */
-abstract class Tx_Vhs_ViewHelpers_Math_AbstractMultipleMathViewHelper extends Tx_Vhs_ViewHelpers_Math_AbstractSingleMathViewHelper {
+abstract class AbstractMultipleMathViewHelper extends AbstractViewHelper
+{
+    use ArrayConsumingViewHelperTrait;
 
-	/**
-	 * @return void
-	 */
-	public function initializeArguments() {
-		parent::initializeArguments();
-		$this->registerArgument('b', 'mixed', 'Second number or Iterator/Traversable/Array for calculation', TRUE);
-	}
+    public function initializeArguments(): void
+    {
+        parent::initializeArguments();
+        $this->registerArgument('a', 'mixed', 'First number for calculation');
+        $this->registerArgument('b', 'mixed', 'Second number or Iterator/Traversable/Array for calculation', true);
+        $this->registerArgument(
+            'fail',
+            'boolean',
+            'If TRUE, throws an Exception if argument "a" is not specified and no child content or inline argument ' .
+            'is found. Usually okay to use a NULL value (as integer zero).',
+            false,
+            false
+        );
+    }
 
-	/**
-	 * @return mixed
-	 * @throw Exception
-	 */
-	public function render() {
-		$a = $this->getInlineArgument();
-		$b = $this->arguments['b'];
-		return $this->calculate($a, $b);
-	}
+    /**
+     * @return mixed
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        /** @var numeric|numeric-string|array|iterable|null $value */
+        $value = $arguments['a'] ?? $renderChildrenClosure();
+        if (null === $value && $arguments['fail']) {
+            ErrorUtility::throwViewHelperException('Required argument "a" was not supplied', 1237823699);
+        }
+        /** @var numeric|numeric-string|array|iterable|null $b */
+        $b = $arguments['b'];
+        return static::calculate($value, $b, $arguments);
+    }
 
-	/**
-	 * @param mixed $a
-	 * @param mixed $b
-	 * @return mixed
-	 * @throws Exception
-	 */
-	protected function calculate($a, $b) {
-		if ($b === NULL) {
-			throw new Exception('Required argument "b" was not supplied', 1237823699);
-		}
-		$aIsIterable = $this->assertIsArrayOrIterator($a);
-		$bIsIterable = $this->assertIsArrayOrIterator($b);
-		if ($aIsIterable === TRUE) {
-			$aCanBeAccessed = $this->assertSupportsArrayAccess($a);
-			$bCanBeAccessed = $this->assertSupportsArrayAccess($b);
-			if ($aCanBeAccessed === FALSE || ($bIsIterable === TRUE && $bCanBeAccessed === FALSE)) {
-				throw new Exception('Math operation attempted on an inaccessible Iterator. Please implement ArrayAccess or convert the value to an array before calculation', 1351891091);
-			}
-			foreach ($a as $index => $value) {
-				$bSideValue = ($bIsIterable === TRUE ? $b[$index] : $b);
-				$a[$index] = $this->calculateAction($value, $bSideValue);
-			}
-			return $a;
-		} elseif ($bIsIterable === TRUE) {
-			// condition matched if $a is not iterable but $b is.
-			throw new Exception('Math operation attempted using an iterator $b against a numeric value $a. Either both $a and $b, or only $a, must be array/Iterator', 1351890876);
-		}
-		return $this->calculateAction($a, $b);
-	}
+    /**
+     * @param numeric|numeric-string|array|iterable|null $a
+     * @param numeric|numeric-string|array|iterable|null $b
+     * @param array $arguments
+     * @return numeric|array
+     * @throws Exception
+     */
+    protected static function calculate($a, $b = null, array $arguments = [])
+    {
+        $aIsIterable = static::assertIsArrayOrIterator($a);
+        $bIsIterable = static::assertIsArrayOrIterator($b);
+        if (!$aIsIterable && $bIsIterable) {
+            ErrorUtility::throwViewHelperException(
+                'Math operation attempted using an iterator $b against a numeric value $a. Either both $a and $b, ' .
+                'or only $a, must be array/Iterator',
+                1351890876
+            );
+        }
+        return static::calculateAction($a, $b, $arguments);
+    }
 
+    /**
+     * @param numeric|numeric-string|array|iterable|null $a
+     * @param numeric|numeric-string|array|iterable|null $b
+     * @param array $arguments
+     * @return numeric|array
+     */
+    abstract protected static function calculateAction($a, $b, array $arguments);
 }

@@ -1,308 +1,536 @@
 <?php
-/***************************************************************
-*  Copyright notice
-*
-*  (c) 2012 Dominic Garms <djgarms@gmail.com>, DMFmedia GmbH
-*
-*  All rights reserved
-*
-*  This script is part of the TYPO3 project. The TYPO3 project is
-*  free software; you can redistribute it and/or modify
-*  it under the terms of the GNU General Public License as published by
-*  the Free Software Foundation; either version 2 of the License, or
-*  (at your option) any later version.
-*
-*  The GNU General Public License can be found at
-*  http://www.gnu.org/copyleft/gpl.html.
-*
-*  This script is distributed in the hope that it will be useful,
-*  but WITHOUT ANY WARRANTY; without even the implied warranty of
-*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*  GNU General Public License for more details.
-*
-*  This copyright notice MUST APPEAR in all copies of the script!
-* ************************************************************* */
+namespace FluidTYPO3\Vhs\ViewHelpers\Page;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
+ *
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Proxy\DoctrineQueryProxy;
+use FluidTYPO3\Vhs\Proxy\SiteFinderProxy;
+use FluidTYPO3\Vhs\Traits\ArrayConsumingViewHelperTrait;
+use FluidTYPO3\Vhs\Traits\TagViewHelperCompatibility;
+use FluidTYPO3\Vhs\Utility\ContentObjectFetcher;
+use FluidTYPO3\Vhs\Utility\CoreUtility;
+use FluidTYPO3\Vhs\Utility\RequestResolver;
+use FluidTYPO3\Vhs\Utility\VersionUtility;
+use TYPO3\CMS\Core\Context\Context;
+use TYPO3\CMS\Core\Context\LanguageAspect;
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Imaging\Icon;
+use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Imaging\IconSize;
+use TYPO3\CMS\Core\Site\Site;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\VersionNumberUtility;
+use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
+use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Exception;
 
 /**
  * ViewHelper for rendering TYPO3 menus in Fluid
- * Require the extension static_info_table
- *
- * @author Dominic Garms, DMFmedia GmbH
- * @package Vhs
- * @subpackage ViewHelpers/Page
+ * Require the extension static_info_table.
  */
-class Tx_Vhs_ViewHelpers_Page_LanguageMenuViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractTagBasedViewHelper {
+class LanguageMenuViewHelper extends AbstractTagBasedViewHelper
+{
+    use ArrayConsumingViewHelperTrait;
+    use TagViewHelperCompatibility;
 
-	/**
-	 * @var array
-	 */
-	protected $languageMenu = array();
+    protected array $languageMenu = [];
+    protected int $defaultLangUid = 0;
 
-	/**
-	 * @var integer
-	 */
-	protected $defaultLangUid = 0;
+    /**
+     * @var string
+     */
+    protected $tagName = 'ul';
 
-	/**
-	 * @var string
-	 */
-	protected $tagName = 'ul';
+    /**
+     * @var ContentObjectRenderer
+     */
+    protected $cObj;
 
-	/**
-	 * @var	tslib_cObj
-	 */
-	protected $cObj;
+    protected ConfigurationManagerInterface $configurationManager;
 
-	/**
-	 * Initialize
-	 * @return void
-	 */
-	public function initializeArguments() {
-		$this->registerUniversalTagAttributes();
-		$this->registerArgument('tagName', 'string', 'Tag name to use for enclosing container, list and flags (not finished) only', FALSE, 'ul');
-		$this->registerArgument('tagNameChildren', 'string', 'Tag name to use for child nodes surrounding links, list and flags only', FALSE, 'li');
-		$this->registerArgument('defaultIsoFlag', 'string', 'ISO code of the default flag', FALSE, 'gb');
-		$this->registerArgument('defaultLanguageLabel', 'string', 'Label for the default language', FALSE, 'English');
-		$this->registerArgument('order', 'mixed', 'Orders the languageIds after this list', FALSE, '');
-		$this->registerArgument('labelOverwrite', 'mixed', 'Overrides language labels', FALSE, '');
-		$this->registerArgument('hideNotTranslated', 'boolean', 'Hides languageIDs which are not translated', FALSE, FALSE);
-		$this->registerArgument('layout', 'string', 'How to render links when using autorendering. Possible selections: name,flag - use fx "name" or "flag,name" or "name,flag"', FALSE, 'flag,name');
-		$this->registerArgument('useCHash', 'boolean', 'Use cHash for typolink', FALSE, TRUE);
-		$this->registerArgument('flagPath', 'string', 'Overwrites the path to the flag folder', FALSE, 'typo3/sysext/t3skin/images/flags/');
-		$this->registerArgument('flagImageType', 'string', 'Sets type of flag image: png, gif, jpeg', FALSE, 'png');
-		$this->registerArgument('linkCurrent', 'boolean', 'Sets flag to link current language or not', FALSE, TRUE);
-		$this->registerArgument('as', 'string', 'If used, stores the menu pages as an array in a variable named according to this value and renders the tag content - which means automatic rendering is disabled if this attribute is used', FALSE, 'languageMenu');
-	}
+    /**
+     * @var Site|\TYPO3\CMS\Core\Site\Entity\Site
+     */
+    protected $site;
 
-	/**
-	 * Render method
-	 *
-	 * @return string
-	 */
-	public function render() {
-		if (FALSE === is_object($GLOBALS['TSFE']->sys_page)) {
-			return NULL;
-		}
-		$this->cObj = t3lib_div::makeInstance('tslib_cObj');
-		$this->tagName = $this->arguments['tagName'];
+    public function injectConfigurationManager(ConfigurationManagerInterface $configurationManager): void
+    {
+        $this->configurationManager = $configurationManager;
+    }
 
-		// to set the tagName we should call initialize()
-		$this->initialize();
+    public function initializeArguments(): void
+    {
+        parent::initializeArguments();
+        $this->registerUniversalTagAttributes();
+        $this->registerArgument(
+            'tagName',
+            'string',
+            'Tag name to use for enclosing container, list and flags (not finished) only',
+            false,
+            'ul'
+        );
+        $this->registerArgument(
+            'tagNameChildren',
+            'string',
+            'Tag name to use for child nodes surrounding links, list and flags only',
+            false,
+            'li'
+        );
+        $this->registerArgument('defaultIsoFlag', 'string', 'ISO code of the default flag');
+        $this->registerArgument('defaultLanguageLabel', 'string', 'Label for the default language');
+        $this->registerArgument('order', 'mixed', 'Orders the languageIds after this list', false, '');
+        $this->registerArgument('labelOverwrite', 'mixed', 'Overrides language labels');
+        $this->registerArgument(
+            'hideNotTranslated',
+            'boolean',
+            'Hides languageIDs which are not translated',
+            false,
+            false
+        );
+        $this->registerArgument(
+            'layout',
+            'string',
+            'How to render links when using autorendering. Possible selections: name,flag - use fx "name" or ' .
+            '"flag,name" or "name,flag"',
+            false,
+            'flag,name'
+        );
+        $this->registerArgument(
+            'useCHash',
+            'boolean',
+            'Use cHash for typolink. Has no effect on TYPO3 v9.5+',
+            false,
+            true
+        );
+        $this->registerArgument('flagPath', 'string', 'Overwrites the path to the flag folder', false, '');
+        $this->registerArgument('flagImageType', 'string', 'Sets type of flag image: png, gif, jpeg', false, 'svg');
+        $this->registerArgument('linkCurrent', 'boolean', 'Sets flag to link current language or not', false, true);
+        $this->registerArgument(
+            'classCurrent',
+            'string',
+            'Sets the class, by which the current language will be marked',
+            false,
+            'current'
+        );
+        $this->registerArgument(
+            'as',
+            'string',
+            'If used, stores the menu pages as an array in a variable named according to this value and renders ' .
+            'the tag content - which means automatic rendering is disabled if this attribute is used',
+            false,
+            'languageMenu'
+        );
+        $this->registerArgument('pageUid', 'integer', 'Optional page uid to use.', false, 0);
+        $this->registerArgument('configuration', 'array', 'Additional typoLink configuration', false, []);
+        $this->registerArgument('excludeQueryVars', 'string', 'Comma-separate list of variables to exclude', false, '');
+        $this->registerArgument(
+            'languages',
+            'mixed',
+            'Array, CSV or Traversable containing UIDs of languages to render'
+        );
+    }
 
-		$this->languageMenu = $this->parseLanguageMenu($this->arguments['order'], $this->arguments['labelOverwrite']);
-		$this->templateVariableContainer->add($this->arguments['as'], $this->languageMenu);
-		$content = $this->renderChildren();
-		$this->templateVariableContainer->remove($this->arguments['as']);
-		if (strlen(trim($content)) === 0) {
-			$content = $this->autoRender($this->languageMenu);
-		}
-		return $content;
-	}
+    public function render(): string
+    {
+        if (!is_object($GLOBALS['TSFE']->sys_page)) {
+            return '';
+        }
+        /** @var ContentObjectRenderer|null $contentObject */
+        $contentObject = ContentObjectFetcher::resolve($this->configurationManager);
+        if ($contentObject === null) {
+            throw new Exception('v:page.languageMenu requires a ContentObjectRenderer, none found', 1737807859);
+        }
 
-	/**
-	 * Automatically render a language menu
-	 *
-	 * @return string
-	 */
-	protected function autoRender() {
-		$content = $this->getLanguageMenu();
-		$content = trim($content);
-		if (FALSE === empty($content)) {
-			$this->tag->setContent($content);
-			$content = $this->tag->render();
-		}
-		return $content;
-	}
+        $this->cObj = $contentObject;
+        $this->tagName = is_scalar($this->arguments['tagName']) ? (string) $this->arguments['tagName'] : 'ul';
+        $this->tag->setTagName($this->tagName);
+        $this->site = $this->getSite();
+        $this->defaultLangUid = $this->site->getDefaultLanguage()->getLanguageId();
+        $this->languageMenu = $this->parseLanguageMenu();
 
-	/**
-	 * Get layout 0 (default): list
-	 *
-	 * @return	string
-	 */
-	protected function getLanguageMenu() {
-		$tagName = $this->arguments['tagNameChildren'];
-		$html = array();
-		$itemCount = count($this->languageMenu);
-		foreach ($this->languageMenu as $index => $var) {
-			$class = '';
-			$classes = array();
-			if (TRUE === (boolean) $var['inactive']) {
-				$classes[] = 'inactive';
-			} elseif (TRUE === (boolean) $var['current']) {
-				$classes[] = 'current';
-			}
-			if (0 === $index) {
-				$classes[] = 'first';
-			} elseif (($itemCount - 1) === $index) {
-				$classes[] = 'last';
-			}
-			if (0 < count($classes)) {
-				$class = ' class="' . implode(' ', $classes) .'" ';
-			}
-			if (TRUE === (boolean) $var['current'] && FALSE === (boolean) $this->arguments['linkCurrent']) {
-				$html[] = '<' . $tagName . $class . '>' . $this->getLayout($var) . '</' . $tagName . '>';
-			} else {
-				$html[] = '<' . $tagName . $class . '><a href="' . htmlspecialchars($var['url']) . '">' . $this->getLayout($var) . '</a></' . $tagName . '>';
-			}
-		}
-		return implode(LF, $html);
-	}
+        /** @var string $as */
+        $as = $this->arguments['as'];
+        $this->renderingContext->getVariableProvider()->add($as, $this->languageMenu);
+        /** @var string|null $content */
+        $content = $this->renderChildren();
+        $content = is_scalar($content) ? (string) $content : '';
+        $this->renderingContext->getVariableProvider()->remove($as);
+        if (0 === mb_strlen(trim($content))) {
+            $content = $this->autoRender();
+        }
+        return $content;
+    }
 
-	/**
-	 * Returns the flag source
-	 *
-	 * @param string $iso
-	 * @return string
-	 */
-	protected function getLanguageFlagSrc($iso) {
-		$path = trim($this->arguments['flagPath']);
-		$imgType = trim($this->arguments['flagImageType']);
-		$img = $path . $iso . '.' . $imgType;
-		return $img;
-	}
+    protected function autoRender(): string
+    {
+        $content = $this->getLanguageMenu();
+        $content = trim($content);
+        if (!empty($content)) {
+            $this->tag->setContent($content);
+            $content = $this->tag->render();
+        }
+        return $content;
+    }
 
-	/**
-	 * Return the layout: flag & text, flags only or text only
-	 *
-	 * @param array $language
-	 * @return string
-	 */
-	protected function getLayout(array $language) {
-		$flagImage = FALSE !== stripos($this->arguments['layout'], 'flag') ? $this->getFlagImage($language) : '';
-		$label = $language['label'];
-		switch ($this->arguments['layout']) {
-			case 'flag':
-				$html = $flagImage;
-				break;
-			case 'name':
-				$html = $label;
-				break;
-			case 'name,flag':
-				$html = $label;
-				if ($flagImage) {
-					$html .= '&nbsp;' . $flagImage;
-				}
-				break;
-			case 'flag,name':
-			default:
-				if ($flagImage) {
-					$html = $flagImage . '&nbsp;' . $label;
-				} else {
-					$html = $label;
-				}
-		}
-		return $html;
-	}
+    /**
+     * Get layout 0 (default): list
+     */
+    protected function getLanguageMenu(): string
+    {
+        $tagName = $this->arguments['tagNameChildren'];
+        $html = [];
+        $itemCount = count($this->languageMenu);
+        foreach ($this->languageMenu as $index => $var) {
+            $class = '';
+            $classes = [];
+            if ($var['inactive']) {
+                $classes[] = 'inactive';
+            }
+            if ($var['current']) {
+                $classes[] = $this->arguments['classCurrent'];
+            }
+            if (0 === $index) {
+                $classes[] = 'first';
+            } elseif (($itemCount - 1) === $index) {
+                $classes[] = 'last';
+            }
+            if (0 < count($classes)) {
+                $class = ' class="' . implode(' ', $classes) . '" ';
+            }
+            if ($var['current'] && !$this->arguments['linkCurrent']) {
+                $html[] = '<' . $tagName . $class . '>' . $this->getLayout($var) . '</' . $tagName . '>';
+            } else {
+                $html[] = '<' . $tagName . $class . '><a href="' . htmlspecialchars($var['url']) . '">' .
+                    $this->getLayout($var) . '</a></' . $tagName . '>';
+            }
+        }
+        return implode(PHP_EOL, $html);
+    }
 
-	/**
-	 * Render the flag image for autorenderer
-	 *
-	 * @param array $language
-	 * @return string
-	 */
-	protected function getFlagImage(array $language) {
-		$conf = array(
-			'file' => $language['flagSrc'],
-			'altText' => $language['label'],
-			'titleText' => $language['label']
-		);
-		return $this->cObj->IMAGE($conf);
-	}
+    /**
+     * Returns the flag source given the language ISO code.
+     */
+    protected function getLanguageFlag(string $iso, string $label): string
+    {
+        /** @var string $flagPath */
+        $flagPath = $this->arguments['flagPath'];
+        /** @var string $flagImageType */
+        $flagImageType = $this->arguments['flagImageType'];
+        if ('' !== $flagPath) {
+            $path = trim($flagPath);
+        } else {
+            $path = CoreUtility::getLanguageFlagIconPath();
+        }
 
-	/**
-	 * Sets all parameter for langMenu
-	 *
-	 * @return array
-	 */
-	protected function parseLanguageMenu() {
-		$order = ($this->arguments['order']) ? t3lib_div::trimExplode(',', $this->arguments['order']) : '';
-		$labelOverwrite = ($this->arguments['labelOverwrite']) ? t3lib_div::trimExplode(',', $this->arguments['labelOverwrite']) : '';
+        $imgType = trim($flagImageType);
+        $conf = [
+            'file' => $path . strtoupper($iso) . '.' . $imgType,
+            'altText' => $label,
+            'titleText' => $label
+        ];
 
-		$tempArray = $languageMenu = array();
+        if (file_exists($conf['file'])) {
+            $contentObjectDefinition = $this->cObj->getContentObject('IMAGE');
+            if ($contentObjectDefinition === null) {
+                return '';
+            }
+            return $this->cObj->render($contentObjectDefinition, $conf);
+        }
+        return '';
+    }
 
-		$tempArray[0] = array(
-			'label' => $this->arguments['defaultLanguageLabel'],
-			'flag' => $this->arguments['defaultIsoFlag']
-		);
+    /**
+     * Returns the flag source given a TYPO3 icon identifier.
+     */
+    protected function getLanguageFlagByIdentifier(string $identifier): string
+    {
+        $iconEnum = VersionUtility::isCoreAtLeast14() ? IconSize::SMALL : Icon::SIZE_SMALL;
+        /** @var IconFactory $iconFactory */
+        $iconFactory = GeneralUtility::makeInstance(IconFactory::class);
+        $icon = $iconFactory->getIcon($identifier, $iconEnum);
+        return $icon->render();
+    }
 
-		$select = 'uid, title, flag';
-		$from = 'sys_language';
-		$where = '1=1' . $this->cObj->enableFields('sys_language');
-		$sysLanguage = $GLOBALS['TYPO3_DB']->exec_SELECTgetRows($select, $from, $where);
+    /**
+     * Return the layout: flag & text, flags only or text only.
+     */
+    protected function getLayout(array $language): string
+    {
+        /** @var string $layout */
+        $layout = $this->arguments['layout'];
+        /** @var string $flagCode */
+        $flagCode = $language['flagCode'];
+        $flagImage = false !== stripos($layout, 'flag') ? $flagCode : '';
+        /** @var string $label */
+        $label = $language['label'];
+        switch ($this->arguments['layout']) {
+            case 'flag':
+                $html = $flagImage;
+                break;
+            case 'name':
+                $html = $label;
+                break;
+            case 'name,flag':
+                $html = $label;
+                if ('' !== $flagImage) {
+                    $html .= '&nbsp;' . $flagImage;
+                }
+                break;
+            case 'flag,name':
+            default:
+                if ('' !== $flagImage) {
+                    $html = $flagImage . '&nbsp;' . $label;
+                } else {
+                    $html = $label;
+                }
+        }
+        return $html;
+    }
 
-		foreach ($sysLanguage as $value) {
-			$tempArray[$value['uid']] = array(
-				'label' => $value['title'],
-				'flag' => $value['flag'],
-			);
-		}
+    /**
+     * Sets all parameter for langMenu.
+     */
+    protected function parseLanguageMenu(): array
+    {
+        /** @var array $languages */
+        $languages = $this->arguments['languages'];
+        /** @var string|null $orderArgument */
+        $orderArgument = $this->arguments['order'];
+        /** @var iterable $order */
+        $order = $orderArgument ? GeneralUtility::trimExplode(',', $orderArgument) : '';
+        /** @var string $labelOverwrite */
+        $labelOverwrite = $this->arguments['labelOverwrite'];
+        if (!empty($labelOverwrite)) {
+            /** @var array $labelOverwrite */
+            $labelOverwrite = GeneralUtility::trimExplode(',', $labelOverwrite);
+        }
 
-			// reorders languageMenu
-		if (!empty($order)) {
-			foreach ($order as $value) {
-				$languageMenu[$value] = $tempArray[$value];
-			}
-		} else {
-			$languageMenu = $tempArray;
-		}
+        // first gather languages into this array so we can reorder it later
+        $limitLanguages = static::arrayFromArrayOrTraversableOrCSVStatic($languages ?? []);
+        $limitLanguages = array_filter($limitLanguages);
+        $tempArray = $this->getLanguagesFromSiteConfiguration($limitLanguages);
 
-			// overwrite of label
-		if (!empty($labelOverwrite)) {
-			$i = 0;
-			foreach ($languageMenu as $key => $value) {
-				$languageMenu[$key]['label'] = $labelOverwrite[$i];
-				$i++;
-			}
-		}
+        // reorder languageMenu
+        $languageMenu = [];
+        if (!empty($order)) {
+            foreach ($order as $value) {
+                if (isset($tempArray[$value])) {
+                    $languageMenu[$value] = $tempArray[$value];
+                }
+            }
+        } else {
+            $languageMenu = $tempArray;
+        }
 
-			// Select all pages_language_overlay records on the current page. Each represents a possibility for a language.
-		$pageArray = array();
-		$table = 'pages_language_overlay';
-		$whereClause = 'pid=' . $GLOBALS['TSFE']->id . ' ';
-		$whereClause .= $GLOBALS['TSFE']->sys_page->enableFields($table);
-		$sysLang = $GLOBALS['TYPO3_DB']->exec_SELECTgetRows('DISTINCT sys_language_uid', $table, $whereClause);
+        // overwrite of label
+        if (!empty($labelOverwrite)) {
+            $i = 0;
+            foreach ($languageMenu as $key => $value) {
+                $languageMenu[$key]['label'] = $labelOverwrite[$i];
+                $i++;
+            }
+        }
 
-		if (!empty($sysLang)) {
-			foreach ($sysLang as $val) {
-				$pageArray[$val['sys_language_uid']] = $val['sys_language_uid'];
-			}
-		}
+        // get the languages actually available on this page
+        $languageUids = $this->getSystemLanguageUids();
 
-		foreach ($languageMenu as $key => $value) {
-			$current = ($GLOBALS['TSFE']->sys_language_uid == $key) ? 1 : 0;
-			$inactive = ($pageArray[$key] || $key == $this->defaultLangUid) ? 0 : 1;
-			$languageMenu[$key]['current'] = $current;
-			$languageMenu[$key]['inactive'] = $inactive;
-			$languageMenu[$key]['url'] = ($current) ? t3lib_div::getIndpEnv('REQUEST_URI') : $this->getLanguageUrl($key, $inactive);
-			$languageMenu[$key]['flagSrc'] = $this->getLanguageFlagSrc($value['flag']);
-			if ($this->arguments['hideNotTranslated'] && $inactive) {
-				unset($languageMenu[$key]);
-			}
-		}
+        if (class_exists(LanguageAspect::class)) {
+            /** @var Context $context */
+            $context = GeneralUtility::makeInstance(Context::class);
+            /** @var LanguageAspect $languageAspect */
+            $languageAspect = $context->getAspect('language');
+            $languageUid = $languageAspect->getId();
+        } else {
+            $languageUid = $GLOBALS['TSFE']->sys_language_uid;
+        }
 
-		return $languageMenu;
-	}
+        foreach ($languageMenu as $key => $value) {
+            $current = $languageUid === (int) $key ? 1 : 0;
+            $inactive = in_array($key, $languageUids) || (int) $key === $this->defaultLangUid ? 0 : 1;
+            $url = $this->getLanguageUrl($key);
+            if (empty($url)) {
+                $url = (string) RequestResolver::getRequest()->getUri();
+            }
+            $languageMenu[$key]['current'] = $current;
+            $languageMenu[$key]['inactive'] = $inactive;
+            $languageMenu[$key]['url'] = $url;
+            $languageMenu[$key]['flagSrc'] = $this->getLanguageFlag($value['flag'] ?? $value['iso'], $value['label']);
+            // if the user has set a flag path, always use that over the TYPO3 icon factory so the user
+            // has the option to use custom flag images based on the ISO code of the language.
+            // if the user has not set a flag path, prefer the TYPO3 icon factory when an icon
+            // identifier is available (i.e., when using the site-based language lookup) .
+            if (isset($value['flagIdentifier']) && empty($this->arguments['flagPath'])) {
+                $languageMenu[$key]['flagCode'] = $this->getLanguageFlagByIdentifier($value['flagIdentifier']);
+            } else {
+                $languageMenu[$key]['flagCode'] = $this->getLanguageFlag(
+                    $value['flag'] ?? $value['iso'],
+                    $value['label']
+                );
+            }
+            if ($this->arguments['hideNotTranslated'] && $inactive) {
+                unset($languageMenu[$key]);
+            }
+        }
 
-	/**
-	 * Get link of language menu entry
-	 *
-	 * @param $uid
-	 * @return string
-	 */
-	protected function getLanguageUrl($uid) {
-		$getValues = t3lib_div::_GET();
-		$getValues['L'] = $uid;
-		$currentPage =  $GLOBALS['TSFE']->id;
-		unset($getValues['id']);
-		unset($getValues['cHash']);
-		$addParams = http_build_query($getValues);
-		$config = array(
-			'parameter' => $currentPage,
-			'returnLast' => 'url',
-			'additionalParams' => '&' . $addParams,
-			'useCacheHash' => $this->arguments['useCHash']
-		);
-		return $this->cObj->typoLink('', $config);
-	}
+        return $languageMenu;
+    }
 
+    /**
+     * Get the list of languages from the sys_language table.
+     */
+    protected function getLanguagesFromSysLanguage(array $limitLanguages): array
+    {
+        // add default language
+        $result[0] = [
+            'label' => $this->arguments['defaultLanguageLabel'] ?? 'English',
+            'flag' => $this->arguments['defaultIsoFlag'] ?? 'gb'
+        ];
+
+        $select = 'uid,title,flag';
+        $from = 'sys_language';
+
+        if (!empty($limitLanguages)) {
+            $sysLanguage = $GLOBALS['TSFE']->cObj->getRecords(
+                $from,
+                ['selectFields' => $select, 'pidInList' => 'root', 'uidInList' => implode(',', $limitLanguages)]
+            );
+        } else {
+            $sysLanguage = $GLOBALS['TSFE']->cObj->getRecords(
+                $from,
+                ['selectFields' => $select, 'pidInList' => 'root']
+            );
+        }
+
+        foreach ($sysLanguage as $value) {
+            $result[$value['uid']] = [
+                'label' => $value['title'],
+                'flag' => $value['flag'],
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get the list of languages from the site configuration.
+     */
+    protected function getLanguagesFromSiteConfiguration(array $limitLanguages): array
+    {
+        $site = $this->getSite();
+        // get only languages set as visible in frontend
+        $languages = $site->getLanguages();
+        $defaultLanguage = $site->getDefaultLanguage();
+
+        $result = [];
+        foreach ($languages as $language) {
+            if (!empty($limitLanguages) && !in_array($language->getLanguageId(), $limitLanguages)) {
+                continue;
+            }
+            $label = $language->getNavigationTitle();
+            $flag = $language->getFlagIdentifier();
+            if ($language->getLanguageId() == $defaultLanguage->getLanguageId()) {
+                // override label/flag of default language if given
+                $label = $this->arguments['defaultLanguageLabel'] ?? $label;
+                $flag = $this->arguments['defaultIsoFlag'] ?? $flag;
+            }
+            if (version_compare(VersionNumberUtility::getCurrentTypo3Version(), '12.4', '>=')) {
+                $isoCode = $language->getLocale()->getLanguageCode();
+            } else {
+                $isoCode = $language->getTwoLetterIsoCode();
+            }
+            $result[$language->getLanguageId()] = [
+                'label' => $label,
+                'iso' => $isoCode,
+                'flagIdentifier' => $flag
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get link of language menu entry
+     *
+     * @param int|string $languageId
+     */
+    protected function getLanguageUrl($languageId): string
+    {
+        /** @var string $excludeVarsArgument */
+        $excludeVarsArgument = $this->arguments['excludeQueryVars'];
+        $excludedVars = trim((string) $excludeVarsArgument);
+        $config = [
+            'parameter' => $this->getPageUid(),
+            'returnLast' => 'url',
+            'additionalParams' => '&L=' . $languageId,
+            'addQueryString' => 1,
+            'addQueryString.' => [
+                'method' => 'GET',
+                'exclude' => 'id,L,cHash' . ($excludedVars ? ',' . $excludedVars : '')
+            ]
+        ];
+        if (is_array($this->arguments['configuration'])) {
+            $config = $this->mergeArrays($config, $this->arguments['configuration']);
+        }
+        return $this->cObj->typoLink('', $config);
+    }
+
+    /**
+     * Get page via pageUid argument or current id
+     */
+    protected function getPageUid(): int
+    {
+        /** @var int $pageUid */
+        $pageUid = $this->arguments['pageUid'];
+        $pageUid = (int) $pageUid;
+        if (0 === $pageUid) {
+            $pageUid = $GLOBALS['TSFE']->id;
+        }
+
+        return (int) $pageUid;
+    }
+
+    /**
+     * Find the site corresponding to the page that the menu is being rendered for
+     *
+     * @return Site|\TYPO3\CMS\Core\Site\Entity\Site
+     */
+    protected function getSite()
+    {
+        /** @var SiteFinderProxy $siteFinder */
+        $siteFinder = GeneralUtility::makeInstance(SiteFinderProxy::class);
+        return $siteFinder->getSiteByPageId($this->getPageUid());
+    }
+
+    /**
+     * Fetches system languages available on the page depending on the TYPO3 version.
+     *
+     * @return int[]
+     * @phpcsSuppress
+     * @see https://docs.typo3.org/typo3cms/extensions/core/Changelog/9.0/Important-82445-MigratePagesLanguageOverlayIntoPages.html
+     */
+    protected function getSystemLanguageUids(): array
+    {
+        $table = 'pages';
+        $parentField = 'l10n_parent';
+
+        /** @var ConnectionPool $connectionPool */
+        $connectionPool = GeneralUtility::makeInstance(ConnectionPool::class);
+        $connection = $connectionPool->getConnectionForTable($table);
+        $queryBuilder = $connection->createQueryBuilder();
+        $queryBuilder->select('sys_language_uid')
+            ->from($table)
+            ->where(
+                $queryBuilder->expr()->eq($parentField, $this->getPageUid())
+            );
+        $result = DoctrineQueryProxy::executeQueryOnQueryBuilder($queryBuilder);
+        $rows = DoctrineQueryProxy::fetchAllAssociative($result);
+
+        return array_column($rows, 'sys_language_uid');
+    }
 }

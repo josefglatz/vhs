@@ -1,186 +1,165 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Resource;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Danilo Bürger <danilo.buerger@hmspl.de>, Heimspiel GmbH
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Proxy\ImageResourceProxy;
+use FluidTYPO3\Vhs\Utility\ContentObjectFetcher;
+use FluidTYPO3\Vhs\Utility\ContextUtility;
+use FluidTYPO3\Vhs\Utility\FrontendSimulationUtility;
+use FluidTYPO3\Vhs\Utility\ParameterUtility;
+use FluidTYPO3\Vhs\Utility\RequestResolver;
+use FluidTYPO3\Vhs\Utility\ResourceUtility;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Exception;
 
 /**
  * Base class for image related view helpers adapted from FLUID
  * original image viewhelper.
- *
- * @author Danilo Bürger <danilo.buerger@hmspl.de>, Heimspiel GmbH
- * @package Vhs
- * @subpackage ViewHelpers\Resource
  */
-abstract class Tx_Vhs_ViewHelpers_Resource_AbstractImageViewHelper extends Tx_Vhs_ViewHelpers_Resource_AbstractResourceViewHelper {
+abstract class AbstractImageViewHelper extends AbstractResourceViewHelper
+{
+    /**
+     * @var ConfigurationManagerInterface
+     */
+    protected $configurationManager;
 
-	/**
-	 * @var t3lib_fe contains a backup of the current $GLOBALS['TSFE'] if used in BE mode
-	 */
-	protected $tsfeBackup;
+    public function injectConfigurationManager(ConfigurationManagerInterface $configurationManager): void
+    {
+        $this->configurationManager = $configurationManager;
+    }
 
-	/**
-	 * @var string
-	 */
-	protected $workingDirectoryBackup;
+    public function initializeArguments(): void
+    {
+        parent::initializeArguments();
+        $this->registerArgument(
+            'relative',
+            'boolean',
+            'If FALSE resource URIs are rendered absolute. URIs in backend mode are always absolute.',
+            false,
+            true
+        );
+        $this->registerArgument(
+            'width',
+            'string',
+            'Width of the image. Numeric value in pixels or simple calculations. See imgResource.width ' .
+            'for possible options.'
+        );
+        $this->registerArgument(
+            'height',
+            'string',
+            'Height of the image. Numeric value in pixels or simple calculations. See imgResource.width for ' .
+            'possible options.'
+        );
+        $this->registerArgument(
+            'minWidth',
+            'string',
+            'Minimum width of the image. Numeric value in pixels or simple calculations. See imgResource.width ' .
+            'for possible options.'
+        );
+        $this->registerArgument(
+            'minHeight',
+            'string',
+            'Minimum height of the image. Numeric value in pixels or simple calculations. ' .
+            'See imgResource.width for possible options.'
+        );
+        $this->registerArgument(
+            'maxWidth',
+            'string',
+            'Maximum width of the image. Numeric value in pixels or simple calculations. ' .
+            'See imgResource.width for possible options.'
+        );
+        $this->registerArgument(
+            'maxHeight',
+            'string',
+            'Maximum height of the image. Numeric value in pixels or simple calculations. ' .
+            'See imgResource.width for possible options.'
+        );
+        $this->registerArgument(
+            'graceful',
+            'bool',
+            'Set to TRUE to ignore files that cannot be loaded. Default behavior is to throw an Exception.',
+            false,
+            false
+        );
+    }
 
-	/**
-	 * @var Tx_Extbase_Configuration_ConfigurationManagerInterface
-	 */
-	protected $configurationManager;
+    public function preprocessImages(array $files, bool $onlyProperties = false): ?array
+    {
+        if (empty($files)) {
+            return null;
+        }
 
-	/**
-	 * @var tslib_cObj
-	 */
-	protected $contentObject;
+        $tsfeBackup = FrontendSimulationUtility::simulateFrontendEnvironment();
 
-	/**
-	 * @param Tx_Extbase_Configuration_ConfigurationManagerInterface $configurationManager
-	 * @return void
-	 */
-	public function injectConfigurationManager(Tx_Extbase_Configuration_ConfigurationManagerInterface $configurationManager) {
-		$this->configurationManager = $configurationManager;
-		$this->contentObject = $this->configurationManager->getContentObject();
-	}
+        $contentObject = ContentObjectFetcher::resolve($this->configurationManager);
 
-	/**
-	 * Initialize arguments.
-	 *
-	 * @return void
-	 * @api
-	 */
-	public function initializeArguments() {
-		parent::initializeArguments();
-		$this->registerArgument('relative', 'boolean', 'If FALSE resource URIs are rendered absolute. URIs in backend mode are always absolute.', FALSE, TRUE);
-		$this->registerArgument('width', 'string', 'Width of the image. Numeric value in pixels or simple calculations. See imgResource.width for possible options.', FALSE, NULL);
-		$this->registerArgument('height', 'string', 'Height of the image. Numeric value in pixels or simple calculations. See imgResource.width for possible options.', FALSE, NULL);
-		$this->registerArgument('minWidth', 'string', 'Minimum width of the image. Numeric value in pixels or simple calculations. See imgResource.width for possible options.', FALSE, NULL);
-		$this->registerArgument('minHeight', 'string', 'Minimum height of the image. Numeric value in pixels or simple calculations. See imgResource.width for possible options.', FALSE, NULL);
-		$this->registerArgument('maxWidth', 'string', 'Maximum width of the image. Numeric value in pixels or simple calculations. See imgResource.width for possible options.', FALSE, NULL);
-		$this->registerArgument('maxHeight', 'string', 'Maximum height of the image. Numeric value in pixels or simple calculations. See imgResource.width for possible options.', FALSE, NULL);
-	}
+        $setup = [
+            'width' => $this->arguments['width'] ?? null,
+            'height' => $this->arguments['height'] ?? null,
+            'minW' => $this->arguments['minWidth'] ?? null,
+            'minH' => $this->arguments['minHeight'] ?? null,
+            'maxW' => $this->arguments['maxWidth'] ?? null,
+            'maxH' => $this->arguments['maxHeight'] ?? null,
+            'treatIdAsReference' => false
+        ];
 
-	/**
-	 * @param array $files
-	 * @param boolean $onlyProperties
-	 * @throws Tx_Fluid_Core_ViewHelper_Exception
-	 * @return array|NULL
-	 */
-	public function preprocessImages($files, $onlyProperties = FALSE) {
-		if (TRUE === empty($files)) {
-			return NULL;
-		}
+        $images = [];
 
-		if ('BE' === TYPO3_MODE) {
-			$this->simulateFrontendEnvironment();
-		}
+        foreach ($files as $file) {
+            $imageInfo = new ImageResourceProxy($contentObject->getImgResource($file->getUid(), $setup));
 
-		$setup = array(
-			'width' => $this->arguments['width'],
-			'height' => $this->arguments['height'],
-			'minW' => $this->arguments['minWidth'],
-			'minH' => $this->arguments['minHeight'],
-			'maxW' => $this->arguments['maxWidth'],
-			'maxH' => $this->arguments['maxHeight'],
-			'treatIdAsReference' => FALSE
-		);
+            if (!$imageInfo->isValid() || !($imageSource = $imageInfo->getOriginalFilename())) {
+                if ($this->arguments['graceful'] ?? false) {
+                    continue;
+                }
+                throw new Exception(
+                    'Could not get image resource for "' . htmlspecialchars($file->getCombinedIdentifier()) . '".',
+                    1253191060
+                );
+            }
 
-		$images = array();
+            if (!GeneralUtility::isValidUrl($imageSource)) {
+                $imageSource = RequestResolver::getFrontendUrlPrefix()
+                    . str_replace('%2F', '/', rawurlencode($imageSource));
+            }
 
-		foreach ($files as $file) {
-			$imageInfo = $this->contentObject->getImgResource($file->getUid(), $setup);
+            if ($onlyProperties) {
+                $file = ResourceUtility::getFileArray($file);
+            }
 
-			$GLOBALS['TSFE']->lastImageInfo = $imageInfo;
-			if (FALSE === is_array($imageInfo)) {
-				throw new Tx_Fluid_Core_ViewHelper_Exception('Could not get image resource for "' . htmlspecialchars($file->getCombinedIdentifier()) . '".', 1253191060);
-			}
+            $images[] = [
+                'info' => $imageInfo->toArray(),
+                'source' => $imageSource,
+                'file' => $file
+            ];
+        }
 
-			$imageInfo[3] = t3lib_div::png_to_gif_by_imagemagick($imageInfo[3]);
-			$GLOBALS['TSFE']->imagesOnPage[] = $imageInfo[3];
-			$imageSource = $GLOBALS['TSFE']->absRefPrefix . t3lib_div::rawUrlEncodeFP($imageInfo[3]);
+        FrontendSimulationUtility::resetFrontendEnvironment($tsfeBackup);
 
-			if (TRUE === $onlyProperties) {
-				$file = $file->getProperties();
-			}
+        return $images;
+    }
 
-			$images[] = array(
-				'info' => $imageInfo,
-				'source' => $imageSource,
-				'file' => $file
-			);
-		}
-
-		if ('BE' === TYPO3_MODE) {
-			$this->resetFrontendEnvironment();
-		}
-
-		return $images;
-	}
-
-	/**
-	 * Prepares $GLOBALS['TSFE'] for Backend mode
-	 * This somewhat hacky work around is currently needed because the getImgResource() function of tslib_cObj relies on those variables to be set
-	 *
-	 * @return void
-	 */
-	protected function simulateFrontendEnvironment() {
-		$this->tsfeBackup = isset($GLOBALS['TSFE']) ? $GLOBALS['TSFE'] : NULL;
-		$this->workingDirectoryBackup = getcwd();
-		chdir(constant('PATH_site'));
-		$typoScriptSetup = $this->configurationManager->getConfiguration(Tx_Extbase_Configuration_ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
-		$GLOBALS['TSFE'] = new stdClass();
-		$template = t3lib_div::makeInstance('t3lib_TStemplate');
-		$template->tt_track = 0;
-		$template->init();
-		$template->getFileName_backPath = constant('PATH_site');
-		$GLOBALS['TSFE']->tmpl = $template;
-		$GLOBALS['TSFE']->tmpl->setup = $typoScriptSetup;
-		$GLOBALS['TSFE']->config = $typoScriptSetup;
-	}
-
-	/**
-	 * Resets $GLOBALS['TSFE'] if it was previously changed by simulateFrontendEnvironment()
-	 *
-	 * @return void
-	 * @see simulateFrontendEnvironment()
-	 */
-	protected function resetFrontendEnvironment() {
-		$GLOBALS['TSFE'] = $this->tsfeBackup;
-		chdir($this->workingDirectoryBackup);
-	}
-
-	/**
-	 * Turns a relative source URI into an absolute URL
-	 * if required
-	 *
-	 * @param string $src
-	 * @return string
-	 */
-	public function preprocessSourceUri($source) {
-		if ('BE' === TYPO3_MODE || FALSE === (boolean) $this->arguments['relative']) {
-			$source = t3lib_div::getIndpEnv('TYPO3_SITE_URL') . $source;
-		}
-
-		return $source;
-	}
-
+    /**
+     * Turns a relative source URI into an absolute URL
+     * if required.
+     */
+    public function preprocessSourceUri(string $source): string
+    {
+        $staticPrefix = RequestResolver::getStaticPrefix();
+        if ($staticPrefix !== '') {
+            $source = $staticPrefix . $source;
+        } elseif (ContextUtility::isBackend() || !$this->arguments['relative']) {
+            /** @var string $siteUrl */
+            $siteUrl = ParameterUtility::resolveParameterValue('TYPO3_SITE_URL');
+            $source = $siteUrl . $source;
+        }
+        return $source;
+    }
 }

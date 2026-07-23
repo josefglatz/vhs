@@ -1,75 +1,128 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Media\Image;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Core\ViewHelper\AbstractViewHelper;
+use FluidTYPO3\Vhs\Proxy\ResourceFactoryProxy;
+use FluidTYPO3\Vhs\Utility\ResourceUtility;
+use TYPO3\CMS\Core\Resource\FileReference as CoreFileReference;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Domain\Model\FileReference as ExtbaseFileReference;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Exception;
 
 /**
- * Base class: Media\Image view helpers
- *
- * @author Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- * @package Vhs
- * @subpackage ViewHelpers\Media\Image
+ * Base class: Media\Image view helpers.
  */
-abstract class Tx_Vhs_ViewHelpers_Media_Image_AbstractImageInfoViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+abstract class AbstractImageInfoViewHelper extends AbstractViewHelper
+{
+    /**
+     * @var ResourceFactoryProxy
+     */
+    protected $resourceFactory;
 
-	/**
-	 * Initialize arguments.
-	 *
-	 * @return void
-	 * @api
-	 */
-	public function initializeArguments() {
-		$this->registerArgument('path', 'string', 'Path to the image file to determine info for.', TRUE);
-	}
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
 
-	/**
-	 * @throws Tx_Fluid_Core_ViewHelper_Exception
-	 * @return array
-	 */
-	public function getInfo() {
+    /**
+     * Construct resource factory
+     */
+    public function __construct()
+    {
+        /** @var ResourceFactoryProxy $resourceFactory */
+        $resourceFactory = GeneralUtility::makeInstance(ResourceFactoryProxy::class);
+        $this->resourceFactory = $resourceFactory;
+    }
 
-		$path = $this->arguments['path'];
+    public function initializeArguments(): void
+    {
+        $this->registerArgument(
+            'src',
+            'mixed',
+            'Path to or id of the image file to determine info for. In case a FileReference is supplied, ' .
+            'treatIdAsUid and treatIdAsReference will automatically be activated.',
+            true
+        );
+        $this->registerArgument(
+            'treatIdAsUid',
+            'boolean',
+            'If TRUE, the path argument is treated as a resource uid.'
+        );
+        $this->registerArgument(
+            'treatIdAsReference',
+            'boolean',
+            'If TRUE, the path argument is treated as a reference uid and will be resolved to a resource via ' .
+            'sys_file_reference.',
+            false,
+            false
+        );
+    }
 
-		if ($path === NULL) {
-			$path = $this->renderChildren();
-			if ($path === NULL) {
-				return array();
-			}
-		}
+    public function getInfo(): array
+    {
+        /** @var string|int|CoreFileReference|ExtbaseFileReference|null $src */
+        $src = $this->arguments['src'];
+        $treatIdAsUid = (bool) $this->arguments['treatIdAsUid'];
+        $treatIdAsReference = (bool) $this->arguments['treatIdAsReference'];
 
-		$file = t3lib_div::getFileAbsFileName($path);
+        if (null === $src) {
+            /** @var string|int|CoreFileReference|ExtbaseFileReference|null $src */
+            $src = $this->renderChildren();
+            if (null === $src) {
+                return [];
+            }
+        }
 
-		if (!file_exists($file) || is_dir($file)) {
-			throw new Tx_Fluid_Core_ViewHelper_Exception('Cannot determine info for "' . $file . '". File does not exist or is a directory.', 1357066532);
-		}
+        if ($src instanceof CoreFileReference || $src instanceof ExtbaseFileReference) {
+            $src = $src->getUid();
+            $treatIdAsUid = false;
+            $treatIdAsReference = true;
+        }
 
-		$info = getimagesize($file);
+        if ($treatIdAsUid || $treatIdAsReference) {
+            $id = (int) $src;
+            $info = [];
+            if ($treatIdAsUid) {
+                $info = $this->getInfoByUid($id);
+            } elseif ($treatIdAsReference) {
+                $info = $this->getInfoByReference($id);
+            }
+        } else {
+            $file = GeneralUtility::getFileAbsFileName((string) $src);
+            if (!file_exists($file) || is_dir($file)) {
+                throw new Exception(
+                    'Cannot determine info for "' . $file . '". File does not exist or is a directory.',
+                    1357066532
+                );
+            }
+            $imageSize = getimagesize($file);
+            $info = [
+                'width'  => $imageSize[0] ?? '',
+                'height' => $imageSize[1] ?? '',
+                'type'   => $imageSize['mime'] ?? '',
+            ];
+        }
 
-		return array(
-			'width'  => $info[0],
-			'height' => $info[1],
-			'type'   => $info['mime'],
-		);
-	}
+        return $info;
+    }
 
+    public function getInfoByReference(int $id): array
+    {
+        $fileReference = $this->resourceFactory->getFileReferenceObject($id);
+        $file = $fileReference->getOriginalFile();
+        return ResourceUtility::getFileArray($file);
+    }
+
+    public function getInfoByUid(int $uid): array
+    {
+        $file = $this->resourceFactory->getFileObject($uid);
+        return ResourceUtility::getFileArray($file);
+    }
 }

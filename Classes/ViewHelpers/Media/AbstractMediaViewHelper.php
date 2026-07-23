@@ -1,83 +1,87 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Media;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2013 Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- * ************************************************************* */
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Traits\TagViewHelperCompatibility;
+use FluidTYPO3\Vhs\Utility\ContextUtility;
+use FluidTYPO3\Vhs\Utility\ParameterUtility;
+use FluidTYPO3\Vhs\Utility\RequestResolver;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\PathUtility;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
 
 /**
- * Base class for media related view helpers
- *
- * @author Björn Fromme <fromme@dreipunktnull.com>, dreipunktnull
- * @package Vhs
- * @subpackage ViewHelpers\Media
+ * Base class for media related view helpers.
  */
-abstract class Tx_Vhs_ViewHelpers_Media_AbstractMediaViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractTagBasedViewHelper {
+abstract class AbstractMediaViewHelper extends AbstractTagBasedViewHelper
+{
+    use TagViewHelperCompatibility;
 
-	/**
-	 *
-	 * @var string
-	 */
-	protected $mediaSource;
+    protected string $mediaSource = '';
 
-	/**
-	 * Initialize arguments.
-	 *
-	 * @return void
-	 * @api
-	 */
-	public function initializeArguments() {
-		$this->registerArgument('src', 'mixed', 'Path to the media resource(s). Can contain single or multiple paths for videos (either CSV, array or implementing Traversable).', TRUE);
-		$this->registerArgument('relative', 'boolean', 'If FALSE media URIs are rendered absolute. URIs in backend mode are always absolute.', FALSE, TRUE);
-	}
+    public function initializeArguments(): void
+    {
+        parent::initializeArguments();
+        $this->registerArgument(
+            'src',
+            'mixed',
+            'Path to the media resource(s). Can contain single or multiple paths for videos/audio (either CSV, ' .
+            'array or implementing Traversable).',
+            true
+        );
+        $this->registerArgument(
+            'relative',
+            'boolean',
+            'If FALSE media URIs are rendered absolute. URIs in backend mode are always absolute.',
+            false,
+            true
+        );
+    }
 
-	/**
-	 * Turns a relative source URI into an absolute URL
-	 * if required
-	 *
-	 * @param string $src
-	 * @return string
-	 */
-	public function preprocessSourceUri($src) {
-		if (TYPO3_MODE === 'BE' || FALSE === (boolean) $this->arguments['relative']) {
-			$src = t3lib_div::getIndpEnv('TYPO3_SITE_URL') . $src;
-		}
-		return $src;
-	}
+    /**
+     * Turns a relative source URI into an absolute URL
+     * if required.
+     */
+    public static function preprocessSourceUri(string $src, array $arguments): string
+    {
+        $src = str_replace('%2F', '/', rawurlencode($src));
+        if (substr($src, 0, 1) !== '/' && substr($src, 0, 4) !== 'http') {
+            $src = RequestResolver::getFrontendUrlPrefix() . $src;
+        }
+        $staticPrefix = RequestResolver::getStaticPrefix();
+        if ($staticPrefix !== '') {
+            $src = $staticPrefix . $src;
+        } elseif (ContextUtility::isBackend() || !$arguments['relative']) {
+            /** @var string $siteUrl */
+            $siteUrl = ParameterUtility::resolveParameterValue('TYPO3_SITE_URL');
+            $src = $siteUrl . ltrim($src, '/');
+        }
+        if (empty($src)) {
+            // Do not pass an empty $src to PathUtility, it requires non-empty strings on 10.4.
+            return '';
+        }
+        return PathUtility::getAbsoluteWebPath($src);
+    }
 
-	/**
-	 * Returns an array of sources resolved from src argument
-	 * which can be either an array, CSV or implement Traversable
-	 * to be consumed by ViewHelpers handling multiple sources.
-	 *
-	 * @return array
-	 */
-	public function getSourcesFromArgument() {
-		$src = $this->arguments['src'];
-		if ($src instanceof Traversable) {
-			$src = iterator_to_array($src);
-		} elseif (is_string($src)) {
-			$src = t3lib_div::trimExplode(',', $src, TRUE);
-		}
-		return $src;
-	}
-
+    /**
+     * Returns an array of sources resolved from src argument
+     * which can be either an array, CSV or implement Traversable
+     * to be consumed by ViewHelpers handling multiple sources.
+     */
+    public static function getSourcesFromArgument(array $arguments): array
+    {
+        $src = $arguments['src'];
+        if ($src instanceof \Traversable) {
+            $src = iterator_to_array($src);
+        } elseif (is_string($src)) {
+            $src = GeneralUtility::trimExplode(',', $src, true);
+        }
+        return $src;
+    }
 }

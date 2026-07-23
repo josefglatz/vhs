@@ -1,42 +1,75 @@
 <?php
-/***************************************************************
-*  Copyright notice
-*
-*  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
-*
-*  All rights reserved
-*
-*  This script is part of the TYPO3 project. The TYPO3 project is
-*  free software; you can redistribute it and/or modify
-*  it under the terms of the GNU General Public License as published by
-*  the Free Software Foundation; either version 2 of the License, or
-*  (at your option) any later version.
-*
-*  The GNU General Public License can be found at
-*  http://www.gnu.org/copyleft/gpl.html.
-*
-*  This script is distributed in the hope that it will be useful,
-*  but WITHOUT ANY WARRANTY; without even the implied warranty of
-*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*  GNU General Public License for more details.
-*
-*  This copyright notice MUST APPEAR in all copies of the script!
-***************************************************************/
+namespace FluidTYPO3\Vhs\ViewHelpers\Iterator;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
+ *
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Core\ViewHelper\AbstractViewHelper;
+use FluidTYPO3\Vhs\Traits\ArrayConsumingViewHelperTrait;
+use FluidTYPO3\Vhs\Traits\TemplateVariableViewHelperTrait;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
 
 /**
  * Implode ViewHelper
  *
- * Implodes an array or array-convertible object by $glue
- *
- * @author Claus Due, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Iterator
+ * Implodes an array or array-convertible object by $glue.
  */
-class Tx_Vhs_ViewHelpers_Iterator_ImplodeViewHelper extends Tx_Vhs_ViewHelpers_Iterator_ExplodeViewHelper {
+class ImplodeViewHelper extends AbstractViewHelper
+{
+    use TemplateVariableViewHelperTrait;
+    use ArrayConsumingViewHelperTrait;
 
-	/**
-	 * @var string
-	 */
-	protected $method = 'implode';
+    /**
+     * @var boolean
+     */
+    protected $escapeChildren = false;
 
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
+
+    public function initializeArguments(): void
+    {
+        parent::initializeArguments();
+
+        $this->registerArgument('content', 'array', 'Array or array-convertible object to be imploded by glue');
+        $this->registerArgument(
+            'glue',
+            'string',
+            'String used as glue in the string to be exploded. To read a constant (like PHP_EOL) use v:const.',
+            false,
+            ','
+        );
+        $this->registerAsArgument();
+    }
+
+    /**
+     * @return mixed
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        /** @var string|null $as */
+        $as = $arguments['as'];
+        /** @var array $content */
+        $content = !empty($as)
+            ? $arguments['content']
+            : ($arguments['content'] ?? $renderChildrenClosure());
+        /** @var string $glue */
+        $glue = $arguments['glue'];
+        $output = implode($glue, $content);
+        return static::renderChildrenWithVariableOrReturnInputStatic(
+            $output,
+            $as,
+            $renderingContext,
+            $renderChildrenClosure
+        );
+    }
 }

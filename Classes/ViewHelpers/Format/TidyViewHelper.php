@@ -1,67 +1,56 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Format;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use FluidTYPO3\Vhs\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
 
 /**
  * Tidy-processes a string (HTML source), applying proper
  * indentation.
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Format
  */
-class Tx_Vhs_ViewHelpers_Format_TidyViewHelper extends Tx_Fluid_Core_ViewHelper_AbstractViewHelper {
+class TidyViewHelper extends AbstractViewHelper
+{
+    /**
+     * @var boolean
+     */
+    protected $escapeOutput = false;
 
-	/**
-	 * @var boolean
-	 */
-	protected $hasTidy = FALSE;
+    public function initializeArguments(): void
+    {
+        $this->registerArgument('content', 'string', 'Content to tidy');
+        $this->registerArgument('encoding', 'string', 'Encoding of string', false, 'utf8');
+    }
 
-	/**
-	 * @return void
-	 */
-	public function initialize() {
-		$this->hasTidy = class_exists('tidy');
-	}
-
-	/**
-	 * Trims content, then trims each line of content
-	 *
-	 * @param string $content
-	 * @throws Exception
-	 * @return string
-	 */
-	public function render($content = NULL) {
-		if (NULL === $content) {
-			$content = $this->renderChildren();
-		}
-		if (TRUE === $this->hasTidy) {
-			$tidy = tidy_parse_string($content);
-			$tidy->cleanRepair();
-			return (string) $tidy;
-		}
-		throw new RuntimeException('TidyViewHelper requires the PHP extension "tidy" which is not installed or not loaded.', 1352059753);
-	}
-
+    /**
+     * @return string|\tidy
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        /** @var string $content */
+        $content = $arguments['content'] ?? $renderChildrenClosure();
+        /** @var string $encoding */
+        $encoding = $arguments['encoding'];
+        if (class_exists('tidy')) {
+            $tidy = tidy_parse_string($content, [], $encoding);
+            if ($tidy === false) {
+                return $content;
+            }
+            $tidy->cleanRepair();
+            return $tidy->root()->value;
+        }
+        throw new \RuntimeException(
+            'TidyViewHelper requires the PHP extension "tidy" which is not installed or not loaded.',
+            1352059753
+        );
+    }
 }

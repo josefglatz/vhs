@@ -1,27 +1,18 @@
 <?php
-/***************************************************************
- *  Copyright notice
+namespace FluidTYPO3\Vhs\ViewHelpers\Render;
+
+/*
+ * This file is part of the FluidTYPO3/Vhs project under GPLv2 or later.
  *
- *  (c) 2012 Claus Due <claus@wildside.dk>, Wildside A/S
- *
- *  All rights reserved
- *
- *  This script is part of the TYPO3 project. The TYPO3 project is
- *  free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  The GNU General Public License can be found at
- *  http://www.gnu.org/copyleft/gpl.html.
- *
- *  This script is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  This copyright notice MUST APPEAR in all copies of the script!
- ***************************************************************/
+ * For the full copyright and license information, please read the
+ * LICENSE.md file that was distributed with this source code.
+ */
+
+use TYPO3\CMS\Core\Cache\CacheManager;
+use TYPO3\CMS\Core\Cache\Frontend\FrontendInterface;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
 
 /**
  * ### Cache Rendering ViewHelper
@@ -54,84 +45,88 @@
  * Do not use around ViewHelpers which add header data or which
  * interact with the PageRenderer or other "live" objects; this
  * includes many of the VHS ViewHelpers!
- *
- * @author Claus Due <claus@wildside.dk>, Wildside A/S
- * @package Vhs
- * @subpackage ViewHelpers\Render
  */
-class Tx_Vhs_ViewHelpers_Render_CacheViewHelper extends Tx_Vhs_ViewHelpers_Render_AbstractRenderViewHelper {
+class CacheViewHelper extends AbstractRenderViewHelper
+{
+    private const string ID_PREFIX = 'vhs-render-cache-viewhelper';
+    private const string ID_SEPARATOR = '-';
 
-	const ID_SEPARATOR = '-';
+    /**
+     * @var boolean
+     */
+    protected $escapeChildren = false;
 
-	/**
-	 * @var t3lib_cache_frontend_VariableFrontend
-	 */
-	protected $cache;
+    public function initializeArguments(): void
+    {
+        $this->registerArgument('content', 'string', 'Content to be cached');
+        $this->registerArgument('identity', 'string', 'Identity for cached entry', true);
+        parent::initializeArguments();
+    }
 
-	/**
-	 * @return void
-	 */
-	public function initialize() {
-		$this->cache = $GLOBALS['typo3CacheManager']->getCache('extbase_object');
-	}
+    /**
+     * @return mixed
+     */
+    public static function renderStatic(
+        array $arguments,
+        \Closure $renderChildrenClosure,
+        RenderingContextInterface $renderingContext
+    ) {
+        /** @var string $identity */
+        $identity = $arguments['identity'];
+        if (!ctype_alnum(preg_replace('/[\-_]/i', '', $identity))) {
+            if ($identity instanceof DomainObjectInterface) {
+                $identity = get_class($identity) . self::ID_SEPARATOR . $identity->getUid();
+            } elseif (method_exists($identity, '__toString')) {
+                $identity = (string) $identity;
+            } else {
+                throw new \RuntimeException(
+                    'Parameter $identity for Render/CacheViewHelper was not a string or a string-convertible object',
+                    1352581782
+                );
+            }
+        }
 
-	/**
-	 * Render
-	 *
-	 * @param mixed $identity Identifier for the cached content (usage preferred)
-	 * @param mixed $content Value to be cached
-	 * @return mixed
-	 * @throws RuntimeException
-	 */
-	public function render($identity, $content = NULL) {
-		if (ctype_alnum(preg_replace('/[\-_]/i', '', $identity)) === FALSE) {
-			if ($identity instanceof Tx_Extbase_DomainObject_DomainObjectInterface) {
-				$identity = get_class($identity) . self::ID_SEPARATOR . $identity->getUid();
-			} elseif (method_exists($identity, '__toString')) {
-				$identity = (string) $identity;
-			} else {
-				throw new RuntimeException(
-					'Parameter $identity for Render/CacheViewHelper was not a string or a string-convertible object',
-					1352581782
-				);
-			}
-		}
-		if ($this->has($identity)) {
-			return $this->retrieve($identity);
-		}
-		if ($content === NULL) {
-			$content = $this->renderChildren();
-		}
-		$this->store($content, $identity);
-		return $content;
-	}
+        // Hash the cache-key to circumvent disallowed chars
+        $identity = sha1($identity);
 
-	/**
-	 * @param string $id
-	 * @return boolean
-	 */
-	protected function has($id) {
-		return $this->cache->has(get_class($this) . self::ID_SEPARATOR . $id);
-	}
+        if (static::has($identity)) {
+            return static::retrieve($identity);
+        }
+        /** @var mixed $content */
+        $content = $arguments['content'] ?? $renderChildrenClosure();
+        static::store($content, $identity);
+        return $content;
+    }
 
-	/**
-	 * @param mixed $value
-	 * @param string $id
-	 * @return void
-	 */
-	protected function store($value, $id) {
-		$this->cache->set(get_class($this) . self::ID_SEPARATOR . $id, $value);
-	}
+    protected static function has(string $id): bool
+    {
+        return static::getCache()->has(self::ID_PREFIX . self::ID_SEPARATOR . $id);
+    }
 
-	/**
-	 * @param string $id
-	 * @return mixed
-	 */
-	protected function retrieve($id) {
-		if ($this->cache->has(get_class($this) . self::ID_SEPARATOR . $id)) {
-			return $this->cache->get(get_class($this) . self::ID_SEPARATOR . $id);
-		}
-		return NULL;
-	}
+    /**
+     * @param mixed $value
+     */
+    protected static function store($value, string $id): void
+    {
+        static::getCache()->set(self::ID_PREFIX . self::ID_SEPARATOR . $id, $value);
+    }
 
+    /**
+     * @return mixed
+     */
+    protected static function retrieve(string $id)
+    {
+        $cache = static::getCache();
+        if ($cache->has(self::ID_PREFIX . self::ID_SEPARATOR . $id)) {
+            return $cache->get(self::ID_PREFIX . self::ID_SEPARATOR . $id);
+        }
+        return null;
+    }
+
+    protected static function getCache(): FrontendInterface
+    {
+        /** @var CacheManager $cacheManager */
+        $cacheManager = GeneralUtility::makeInstance(CacheManager::class);
+        return $cacheManager->getCache('vhs_main');
+    }
 }
